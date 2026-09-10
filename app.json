@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Daily Plate",
+    "slug": "daily-plate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["android"],
+    "scheme": "dailyplate",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.dailyplate.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#F3EBDD"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-camera", { "cameraPermission": "Allow Daily Plate to scan food barcodes.", "recordAudioAndroid": false }],
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
