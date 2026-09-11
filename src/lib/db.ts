@@ -15,7 +15,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       id TEXT PRIMARY KEY NOT NULL, name_en TEXT NOT NULL, name_el TEXT NOT NULL,
       brand TEXT, barcode TEXT, calories_per_100g REAL NOT NULL,
       protein_per_100g REAL NOT NULL, carbs_per_100g REAL NOT NULL, fat_per_100g REAL NOT NULL,
-      serving_grams REAL, source TEXT NOT NULL
+      serving_grams REAL, source TEXT NOT NULL, is_favorite INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS recipes (
       id TEXT PRIMARY KEY NOT NULL, name_en TEXT NOT NULL, name_el TEXT NOT NULL,
@@ -31,7 +31,8 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS diary_date_idx ON diary_entries(date);
     CREATE TABLE IF NOT EXISTS plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal_type TEXT NOT NULL,
-      recipe_id TEXT NOT NULL, portion REAL NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0,
+      recipe_id TEXT, portion REAL NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0,
+      food_id TEXT, food_name TEXT, portion_grams REAL, calories REAL, protein REAL, carbs REAL, fat REAL,
       UNIQUE(date, meal_type)
     );
     CREATE TABLE IF NOT EXISTS groceries (
@@ -42,7 +43,49 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS weights (
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, kilograms REAL NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS water_entries (
+      date TEXT PRIMARY KEY NOT NULL, ml REAL NOT NULL DEFAULT 0
+    );
   `);
+
+  // Lightweight migration for installs created before `source` existed on diary_entries.
+  try {
+    const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(diary_entries)');
+    if (cols.length > 0 && !cols.some((c) => c.name === 'source')) {
+      await db.execAsync(`ALTER TABLE diary_entries ADD COLUMN source TEXT NOT NULL DEFAULT 'Custom'`);
+    }
+  } catch (e) {
+    console.error('Failed to migrate diary_entries', e);
+  }
+  try {
+    const foodCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(foods)');
+    if (foodCols.length > 0 && !foodCols.some((c) => c.name === 'is_favorite')) {
+      await db.execAsync(`ALTER TABLE foods ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0`);
+    }
+  } catch (e) {
+    console.error('Failed to migrate foods', e);
+  }
+  // Food-based planner: plans rows can reference a food instead of a recipe.
+  try {
+    const planCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(plans)');
+    const names = new Set(planCols.map((c) => c.name));
+    const addCols: [string, string][] = [
+      ['food_id', 'ALTER TABLE plans ADD COLUMN food_id TEXT'],
+      ['food_name', 'ALTER TABLE plans ADD COLUMN food_name TEXT'],
+      ['portion_grams', 'ALTER TABLE plans ADD COLUMN portion_grams REAL'],
+      ['calories', 'ALTER TABLE plans ADD COLUMN calories REAL'],
+      ['protein', 'ALTER TABLE plans ADD COLUMN protein REAL'],
+      ['carbs', 'ALTER TABLE plans ADD COLUMN carbs REAL'],
+      ['fat', 'ALTER TABLE plans ADD COLUMN fat REAL'],
+    ];
+    for (const [name, sql] of addCols) {
+      if (planCols.length > 0 && !names.has(name)) {
+        await db.execAsync(sql);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to migrate plans', e);
+  }
 
   await db.runAsync('INSERT OR IGNORE INTO settings (id) VALUES (?)', 'profile');
   for (const food of seedFoods) {

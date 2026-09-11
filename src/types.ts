@@ -14,6 +14,7 @@ export type Food = {
   fat_per_100g: number;
   serving_grams?: number | null;
   source: string;
+  is_favorite?: number | null;
 };
 
 export type RecipeIngredient = {
@@ -66,10 +67,19 @@ export type PlanEntry = {
   id: number;
   date: string;
   meal_type: MealType;
-  recipe_id: string;
+  recipe_id: string | null;
   portion: number;
   locked: boolean;
   recipe?: Recipe;
+  kind: 'recipe' | 'food';
+  food_id?: string | null;
+  food_name?: string | null;
+  portion_grams?: number | null;
+  calories?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  food?: Food;
 };
 
 export type GroceryItem = {

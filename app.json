@@ -9,6 +9,7 @@
     "newArchEnabled": true,
     "android": {
       "package": "com.dailyplate.app",
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#F3EBDD"
       }
