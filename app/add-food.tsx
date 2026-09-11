@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
+import { useGamification } from '@/src/context/GamificationContext';
 import { colors, radius, styles } from '@/src/theme';
 import { Food, MealType } from '@/src/types';
 import { parseNumber, scaleFood } from '@/src/lib/nutrition';
@@ -88,6 +89,7 @@ const SearchHeader = memo(function SearchHeader({
 export default function AddFood() {
   const db = useSQLiteContext();
   const { t, locale } = useApp();
+  const { addXp } = useGamification();
   const params = useLocalSearchParams<{ date?: string; meal?: MealType }>();
   const date = String(params.date ?? new Date().toISOString().slice(0, 10));
   const meal = (params.meal ?? 'snack') as MealType;
@@ -172,6 +174,7 @@ export default function AddFood() {
       const values = scaleFood(selected, grams);
       const foodName = (locale === 'el' ? selected.name_el : selected.name_en) || selected.name_en || selected.name_el || t('unknown');
       await db.runAsync('INSERT INTO diary_entries (date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat,source) VALUES (?,?,?,?,?,?,?,?,?,?)', date, meal, selected.id, foodName, grams, values.calories, values.protein, values.carbs, values.fat, selected.source ?? 'Custom');
+      addXp('log-food');
       // Keep this picker scoped to the same date/meal so another item can be
       // added immediately. The search text/results stay intact; only the
       // selected-food editor is cleared for the next item.

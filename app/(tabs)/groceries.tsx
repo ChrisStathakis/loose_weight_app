@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { useApp } from '@/src/context/AppContext';
+import { useGamification } from '@/src/context/GamificationContext';
+import * as Haptics from 'expo-haptics';
 import { dateKey, dateLabel } from '@/src/lib/db';
 import { GroceryItem, Recipe, RecipeIngredient } from '@/src/types';
 import { colors, radius, styles } from '@/src/theme';
@@ -13,6 +15,7 @@ type RecipeRow = Omit<Recipe, 'ingredients'> & { ingredients: string };
 export default function Groceries() {
   const db = useSQLiteContext();
   const { locale, t } = useApp();
+  const { celebrate } = useGamification();
   const [start, setStart] = useState(dateKey());
   const [items, setItems] = useState<GroceryItem[]>([]);
   const endDate = (() => { const value = new Date(`${start}T12:00:00`); value.setDate(value.getDate() + 6); return value.toISOString().slice(0, 10); })();
@@ -20,7 +23,7 @@ export default function Groceries() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const shift = (amount: number) => { const value = new Date(`${start}T12:00:00`); value.setDate(value.getDate() + amount); setStart(value.toISOString().slice(0, 10)); };
   const build = async () => { const rows = await db.getAllAsync<RecipeRow & { date: string; portion: number }>('SELECT p.date,p.portion,r.* FROM plans p JOIN recipes r ON r.id=p.recipe_id WHERE p.date BETWEEN ? AND ?', start, endDate); const grouped = new Map<string, { amount: number; unit: string; name: string }>(); rows.forEach((row) => { const ingredients = JSON.parse(row.ingredients) as RecipeIngredient[]; const recipeScale = Number(row.portion) / Math.max(1, Number(row.servings)); ingredients.forEach((ingredient) => { const name = locale === 'el' ? ingredient.name_el : ingredient.name_en; const key = `${name.toLowerCase()}|${ingredient.unit}`; const current = grouped.get(key) ?? { amount: 0, unit: ingredient.unit, name }; current.amount += ingredient.amount * recipeScale; grouped.set(key, current); }); }); const previous = await db.getAllAsync<any>('SELECT ingredient,unit,checked FROM groceries WHERE date=?', start); const checkedMap = new Map(previous.map((row) => [`${row.ingredient.toLowerCase()}|${row.unit}`, Number(row.checked)])); await db.runAsync('DELETE FROM groceries WHERE date=?', start); for (const item of grouped.values()) await db.runAsync('INSERT INTO groceries (date,ingredient,amount,unit,checked) VALUES (?,?,?,?,?)', start, item.name, Number(item.amount.toFixed(1)), item.unit, checkedMap.get(`${item.name.toLowerCase()}|${item.unit}`) ?? 0); load(); };
-  const toggle = async (item: GroceryItem) => { await db.runAsync('UPDATE groceries SET checked=? WHERE id=?', item.checked ? 0 : 1, item.id); load(); };
+  const toggle = async (item: GroceryItem) => { await db.runAsync('UPDATE groceries SET checked=? WHERE id=?', item.checked ? 0 : 1, item.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); const nextChecked = items.filter((i) => (i.id === item.id ? !i.checked : i.checked)).length; if (items.length > 0 && nextChecked === items.length) celebrate(locale === 'el' ? 'Όλα τα ψώνια!' : 'Groceries done!', '🧺'); load(); };
   const checked = items.filter((item) => item.checked).length;
   const pct = items.length ? checked / items.length : 0;
   return (

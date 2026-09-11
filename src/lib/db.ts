@@ -46,6 +46,23 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS water_entries (
       date TEXT PRIMARY KEY NOT NULL, ml REAL NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS xp_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, kind TEXT NOT NULL, points REAL NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS badges (
+      id TEXT PRIMARY KEY NOT NULL, unlocked_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS opponent_progress (
+      week TEXT PRIMARY KEY NOT NULL, opponent_id TEXT NOT NULL, hp REAL NOT NULL DEFAULT 100
+    );
+    CREATE TABLE IF NOT EXISTS workouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, type TEXT NOT NULL,
+      minutes REAL NOT NULL DEFAULT 0, calories REAL NOT NULL DEFAULT 0,
+      weight_kg REAL, source TEXT NOT NULL DEFAULT 'manual',
+      external_id TEXT, note TEXT, created_at TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS workouts_date_idx ON workouts(date);
+    CREATE UNIQUE INDEX IF NOT EXISTS workouts_external_idx ON workouts(external_id);
   `);
 
   // Lightweight migration for installs created before `source` existed on diary_entries.

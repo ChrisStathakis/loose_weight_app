@@ -24,6 +24,39 @@ export const colors = {
   yellow: '#F3C969',
   red: '#C24949',
   white: '#FFFFFF',
+  // Premium dark + glass tokens
+  inkDeep: '#0C1A13',
+  pine: '#0B3B2A',
+  pineLight: '#1B5C40',
+  glass: 'rgba(255,255,255,0.12)',
+  glassBorder: 'rgba(255,255,255,0.22)',
+  neonLime: '#C6F135',
+  goldBright: '#FFD84D',
+};
+
+export const gradients = {
+  heroDark: ['#0B3B2A', '#14532D', '#1E7A4F'] as const,
+  heroBerry: ['#3B1020', '#7A2340', '#E86A7C'] as const,
+  heroGrape: ['#221344', '#4A2E8A', '#8E6CC8'] as const,
+  heroSunset: ['#3A1C07', '#B4501A', '#FF8A3D'] as const,
+  gold: ['#FFC93C', '#FFD84D', '#FFF3C4'] as const,
+};
+
+export const shadows = {
+  hero: {
+    shadowColor: '#0B3B2A',
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  card: {
+    shadowColor: '#2F6B4F',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
 };
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 };

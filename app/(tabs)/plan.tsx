@@ -4,16 +4,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { useApp } from '@/src/context/AppContext';
+import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
 import { chooseFoodPlan, FoodDayPlan, mealSlotsForCount } from '@/src/lib/planner';
 import { parseNumber, scaleFood, sumNutrition } from '@/src/lib/nutrition';
 import { foodEmoji } from '@/src/lib/habits';
 import { filterFoods, normalizeEl } from '@/src/lib/search';
 import { Food, MealType, PlanEntry, Recipe } from '@/src/types';
-import { colors, radius, styles } from '@/src/theme';
+import { colors, gradients, radius, styles } from '@/src/theme';
 import { DateStepper } from '@/src/components/DateStepper';
 import { EmptyState } from '@/src/components/EmptyState';
 import { KcalBadge } from '@/src/components/MacroPill';
+import { GradientHero } from '@/src/ui/GradientHero';
+import { PressScale } from '@/src/ui/PressScale';
 
 type RecipeRow = Omit<Recipe, 'ingredients'> & { ingredients: string };
 
@@ -32,6 +35,7 @@ const foodName = (food: Food, locale: 'en' | 'el') =>
 export default function Plan() {
   const db = useSQLiteContext();
   const { settings, locale, t } = useApp();
+  const { addXp, unlockBadge } = useGamification();
   const [date, setDate] = useState(dateKey());
   const [plans, setPlans] = useState<PlanEntry[]>([]);
 
@@ -166,6 +170,8 @@ export default function Plan() {
       }
       setPreview(null);
       await load();
+      addXp('plan-saved');
+      unlockBadge('planner-pro');
       Alert.alert(t('plan'), t('planSaved'));
     } catch (e) {
       console.error('Failed to save plan', e);
@@ -273,7 +279,7 @@ export default function Plan() {
       <Text style={styles.subtitle}>{dateLabel(date, locale)}</Text>
       <DateStepper date={date} locale={locale} onChange={(next) => { setDate(next); setPreview(null); }} />
 
-      <View style={styles.heroCard}>
+      <GradientHero colors={gradients.heroDark}>
         <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '800', fontSize: 12 }}>✨ {t('planTotals')}</Text>
         <Text style={{ color: colors.white, fontSize: 30, fontWeight: '900', marginTop: 6 }}>
           {Math.round(totals.calories)} <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>/ {Math.round(calorieGoal)} kcal</Text>
@@ -284,7 +290,7 @@ export default function Plan() {
             { l: t('carbs'), v: totals.carbs },
             { l: t('fat'), v: totals.fat },
           ].map((m) => (
-            <View key={m.l} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: radius.md, padding: 10 }}>
+            <View key={m.l} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: radius.md, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)' }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.75)' }}>{m.l}</Text>
               <Text style={{ fontWeight: '900', color: colors.white, marginTop: 2 }}>{Math.round(m.v)}g</Text>
             </View>
@@ -295,7 +301,7 @@ export default function Plan() {
             {t('shortfall')} {Math.round(calorieGoal - totals.calories)} kcal.
           </Text>
         )}
-      </View>
+      </GradientHero>
 
       {/* Builder setup */}
       <View style={styles.card}>
@@ -379,10 +385,10 @@ export default function Plan() {
         </Pressable>
       </View>
 
-      <Pressable onPress={generate} style={[styles.button, { flexDirection: 'row', gap: 8, marginTop: 14, opacity: liked.length ? 1 : 0.6 }]}>
+      <PressScale onPress={generate} style={[styles.button, { flexDirection: 'row', gap: 8, marginTop: 14, opacity: liked.length ? 1 : 0.6 }]} haptic>
         <Ionicons name="sparkles" size={20} color={colors.lemon} />
         <Text style={styles.buttonText}>{t('generateProposal')}</Text>
-      </Pressable>
+      </PressScale>
       {liked.length === 0 && (
         <Text style={{ color: colors.muted, marginTop: 8, fontWeight: '700', textAlign: 'center' }}>{t('needFoods')}</Text>
       )}

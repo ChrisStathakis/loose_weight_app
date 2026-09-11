@@ -89,3 +89,47 @@ export type GroceryItem = {
   unit: string;
   checked: boolean;
 };
+
+export type OpponentId = 'sugar-gremlin' | 'snack-kraken' | 'couch-sloth';
+
+export type Opponent = {
+  id: OpponentId;
+  name_en: string;
+  name_el: string;
+  emoji: string;
+  gradient: readonly [string, string, string];
+  taunt_en: string;
+  taunt_el: string;
+  weakness_en: string;
+  weakness_el: string;
+};
+
+export type BadgeId = 'streak-3' | 'goal-crusher' | 'hydrated' | 'boss-slayer' | 'planner-pro' | 'workout-warrior';
+
+export type Badge = {
+  id: BadgeId;
+  emoji: string;
+  name_en: string;
+  name_el: string;
+  desc_en: string;
+  desc_el: string;
+};
+
+export type WorkoutType =
+  | 'walk' | 'run' | 'cycle' | 'swim' | 'strength'
+  | 'hiit' | 'yoga' | 'football' | 'basketball' | 'dance'
+  | 'hike' | 'rowing' | 'elliptical' | 'other';
+
+export type WorkoutSource = 'manual' | 'health-connect';
+
+export type Workout = {
+  id: number;
+  date: string;
+  type: WorkoutType;
+  minutes: number;
+  calories: number;
+  weight_kg: number | null;
+  source: WorkoutSource;
+  external_id: string | null;
+  note: string | null;
+};
