@@ -9,6 +9,18 @@ npm install
 npx expo start
 ```
 
+For devices not on the same Wi-Fi (or restrictive networks), use the tunnel:
+
+```bash
+npm run start:tunnel
+# equivalent: npx expo start --tunnel --go --clear
+```
+
+Scan the QR code with Expo Go (SDK 57). Tunnel reloads are slower than
+LAN. If port 8081 is already in use, stop the stale dev server first —
+only one `expo start` may hold the port. Health Connect sync is disabled
+in Expo Go (shows “not available”); it requires the dev build below.
+
 Use a development build or an Android emulator/device. SDK 57 requires the matching Expo Go/development client. To create a local Android build:
 
 ```bash

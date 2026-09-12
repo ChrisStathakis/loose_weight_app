@@ -8,7 +8,6 @@
       "android"
     ],
     "scheme": "dailyplate",
-    "newArchEnabled": true,
     "android": {
       "package": "com.dailyplate.app",
       "softwareKeyboardLayoutMode": "pan",
@@ -26,7 +25,10 @@
         }
       ],
       "expo-sqlite",
-      "react-native-health-connect"
+      "react-native-health-connect",
+      "expo-localization",
+      "expo-sharing",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
