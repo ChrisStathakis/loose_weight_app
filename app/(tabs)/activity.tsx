@@ -9,6 +9,7 @@ import { dateKey, dateLabel } from '@/src/lib/db';
 import { colors, gradients, radius, styles } from '@/src/theme';
 import { parseNumber } from '@/src/lib/nutrition';
 import { WORKOUT_EMOJI, WORKOUT_TYPES, estimateForWorkout } from '@/src/lib/activity';
+import { checkHealthAvailability, getLastSync, syncHealthConnect } from '@/src/lib/healthSync';
 import { Workout, WorkoutType } from '@/src/types';
 import type { TranslationKey } from '@/src/lib/i18n';
 import { DateStepper } from '@/src/components/DateStepper';
@@ -34,14 +35,24 @@ export default function Activity() {
   const [caloriesOverride, setCaloriesOverride] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Health Connect sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+
   const typeName = useCallback((ty: WorkoutType) => t(`workout_${ty}` as TranslationKey), [t]);
 
   const load = useCallback(async () => {
     const rows = await db.getAllAsync<Workout>(
-      'SELECT id,date,type,minutes,calories,weight_kg,source,external_id,note FROM workouts WHERE date=? ORDER BY id DESC',
+      'SELECT id,date,type,minutes,calories,weight_kg,source,external_id,note,steps,distance_m FROM workouts WHERE date=? ORDER BY id DESC',
       date,
     );
     setWorkouts(rows);
+    try {
+      setLastSync(await getLastSync(db));
+    } catch {
+      // sync_state may not exist yet — ignore
+    }
     const start = new Date(`${date}T12:00:00`);
     start.setDate(start.getDate() - 6);
     const startKey = start.toISOString().slice(0, 10);
@@ -78,7 +89,7 @@ export default function Activity() {
     setSaving(true);
     try {
       await db.runAsync(
-        'INSERT INTO workouts (date,type,minutes,calories,weight_kg,source,created_at) VALUES (?,?,?,?,?,?,?,?)',
+        'INSERT INTO workouts (date,type,minutes,calories,weight_kg,source,created_at) VALUES (?,?,?,?,?,?,?)',
         date, wtype, minutesNum, overrideNum, weightNum, 'manual', new Date().toISOString(),
       );
       setCaloriesOverride('');
@@ -116,6 +127,39 @@ export default function Activity() {
         },
       },
     ]);
+  };
+
+  const syncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const avail = await checkHealthAvailability();
+      if (!avail.available) {
+        setSyncMsg(t('hcNotAvailable'));
+        return;
+      }
+      const res = await syncHealthConnect(db);
+      await load();
+      if (res.imported > 0) {
+        // One XP award + one banner per sync, no matter how many sessions.
+        await addXp('workout-log');
+        celebrate(t('hcSynced').replace('{n}', String(res.imported)), '⌚');
+        setSyncMsg(t('hcSynced').replace('{n}', String(res.imported)));
+      } else if (res.sessions === 0) {
+        setSyncMsg(t('hcNoSessions'));
+      } else {
+        setSyncMsg(t('hcUpToDate'));
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('Health Connect sync failed', e);
+      if (msg === 'permission-denied') setSyncMsg(t('hcPermissionDenied'));
+      else if (msg === 'not-android') setSyncMsg(t('hcNotAvailable'));
+      else setSyncMsg(t('hcSyncFailed'));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
@@ -221,6 +265,8 @@ export default function Activity() {
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '700', marginTop: 3 }}>
                 {Math.round(Number(w.minutes))} {t('minutesShort')} · {Math.round(Number(w.calories))} kcal
                 {w.source === 'health-connect' ? ' · ⌚' : ''}
+                {w.steps != null && Number(w.steps) > 0 ? ` · ${Math.round(Number(w.steps))} ${t('stepsShort')}` : ''}
+                {w.distance_m != null && Number(w.distance_m) > 0 ? ` · ${(Number(w.distance_m) / 1000).toFixed(1)} km` : ''}
               </Text>
             </View>
             <PressScale onPress={() => remove(w.id)} hitSlop={10} style={{ padding: 6 }} haptic>
@@ -233,6 +279,21 @@ export default function Activity() {
       <GlassCard>
         <Text style={{ fontWeight: '900', color: colors.ink, fontSize: 15 }}>⌚ {t('connectWatch')}</Text>
         <Text style={{ color: colors.muted, fontSize: 13, marginTop: 6, lineHeight: 18 }}>{t('watchHint')}</Text>
+        {lastSync ? (
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>
+            {t('hcLastSync')}: {new Date(lastSync).toLocaleString(locale === 'el' ? 'el-GR' : 'en-US')}
+          </Text>
+        ) : null}
+        {syncMsg ? (
+          <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700', marginTop: 6 }}>{syncMsg}</Text>
+        ) : null}
+        <PressScale
+          onPress={syncNow}
+          style={[styles.button, { marginTop: 12, opacity: syncing ? 0.6 : 1 }]}
+          haptic
+        >
+          <Text style={styles.buttonText}>{syncing ? '…' : `⌚ ${t('syncNow')}`}</Text>
+        </PressScale>
       </GlassCard>
       <View style={{ height: 8 }} />
     </ScrollView>

@@ -59,10 +59,14 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, type TEXT NOT NULL,
       minutes REAL NOT NULL DEFAULT 0, calories REAL NOT NULL DEFAULT 0,
       weight_kg REAL, source TEXT NOT NULL DEFAULT 'manual',
-      external_id TEXT, note TEXT, created_at TEXT NOT NULL DEFAULT ''
+      external_id TEXT, note TEXT, created_at TEXT NOT NULL DEFAULT '',
+      steps INTEGER, distance_m REAL
     );
     CREATE INDEX IF NOT EXISTS workouts_date_idx ON workouts(date);
     CREATE UNIQUE INDEX IF NOT EXISTS workouts_external_idx ON workouts(external_id);
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL DEFAULT ''
+    );
   `);
 
   // Lightweight migration for installs created before `source` existed on diary_entries.
@@ -102,6 +106,19 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     }
   } catch (e) {
     console.error('Failed to migrate plans', e);
+  }
+  // Health Connect spike: workouts gain steps + distance_m, plus sync_state kv.
+  try {
+    const workoutCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
+    const wnames = new Set(workoutCols.map((c) => c.name));
+    if (workoutCols.length > 0 && !wnames.has('steps')) {
+      await db.execAsync('ALTER TABLE workouts ADD COLUMN steps INTEGER');
+    }
+    if (workoutCols.length > 0 && !wnames.has('distance_m')) {
+      await db.execAsync('ALTER TABLE workouts ADD COLUMN distance_m REAL');
+    }
+  } catch (e) {
+    console.error('Failed to migrate workouts', e);
   }
 
   await db.runAsync('INSERT OR IGNORE INTO settings (id) VALUES (?)', 'profile');

@@ -132,4 +132,6 @@ export type Workout = {
   source: WorkoutSource;
   external_id: string | null;
   note: string | null;
+  steps: number | null;
+  distance_m: number | null;
 };

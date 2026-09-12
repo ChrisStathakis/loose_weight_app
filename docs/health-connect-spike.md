@@ -1,7 +1,8 @@
 # Health Connect Spike Plan — Redmi Auto-Sync
 
-Status: **planned, not implemented**. Manual workout logging + net calories are done;
-this doc covers the automatic smartwatch sync follow-up.
+Status: **implemented, pending phone verification**. Manual workout logging + net calories were done;
+code for the automatic smartwatch sync is in place (`src/lib/healthSync.ts` + Activity Sync-now);
+native rebuild (`expo prebuild --clean` / `expo run:android`) and on-phone checks (§5) still open.
 
 Locked scope: **dev build (`expo run:android`), sync all
 (sessions + calories + steps/distance), manual "Sync now" button**,
