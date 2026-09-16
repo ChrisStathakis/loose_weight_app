@@ -47,9 +47,9 @@ export default function Groceries() {
         {pct === 1 && items.length > 0 && <Text style={{ marginTop: 8, fontWeight: '800', color: colors.green }}>🎉 {t('allDone')}</Text>}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
-        <Pressable onPress={() => shift(-7)} style={styles.outlineButton}><Text style={styles.outlineText}>‹ 7</Text></Pressable>
+        <Pressable onPress={() => shift(-7)} accessibilityLabel="−7" style={[styles.outlineButton, { flexDirection: 'row', gap: 4 }]}><Ionicons name="chevron-back" size={17} color={colors.green} /><Text style={styles.outlineText}>7</Text></Pressable>
         <Pressable onPress={build} style={[styles.button, { flex: 1, marginHorizontal: 10, flexDirection: 'row', gap: 8 }]}><Ionicons name="refresh" color={colors.lemon} size={20} /><Text style={styles.buttonText}>{t('generatePlan')}</Text></Pressable>
-        <Pressable onPress={() => shift(7)} style={styles.outlineButton}><Text style={styles.outlineText}>7 ›</Text></Pressable>
+        <Pressable onPress={() => shift(7)} accessibilityLabel="+7" style={[styles.outlineButton, { flexDirection: 'row', gap: 4 }]}><Text style={styles.outlineText}>7</Text><Ionicons name="chevron-forward" size={17} color={colors.green} /></Pressable>
       </View>
       {items.length === 0 ? (
         <View style={styles.card}><EmptyState emoji="🧺" title={t('groceryList')} body={t('groceryHint')} /></View>

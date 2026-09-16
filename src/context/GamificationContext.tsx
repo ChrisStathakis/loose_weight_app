@@ -11,6 +11,7 @@ type GamificationValue = {
   addXp: (kind: string, explicitPoints?: number) => Promise<void>;
   celebrate: (title: string, emoji?: string) => void;
   unlockBadge: (id: string) => Promise<boolean>;
+  unlockWithFanfare: (id: string, xpKind: string, title: string, emoji?: string) => Promise<void>;
   badges: string[];
 };
 
@@ -76,9 +77,34 @@ export function GamificationProvider({ children }: PropsWithChildren) {
     [db],
   );
 
+  const badgesRef = useRef<string[]>([]);
+  badgesRef.current = badges;
+
+  const unlockWithFanfare = useCallback(
+    async (id: string, xpKind: string, title: string, emoji = '🏅') => {
+      if (badgesRef.current.includes(id)) return;
+      try {
+        const res = await db.runAsync('INSERT OR IGNORE INTO badges (id, unlocked_at) VALUES (?,?)', id, new Date().toISOString());
+        if (res.changes === 0 && badgesRef.current.includes(id)) return;
+        setBadges((b) => (b.includes(id) ? b : [...b, id]));
+      } catch {
+        return;
+      }
+      const points = xpForEvent(xpKind);
+      try {
+        await db.runAsync('INSERT INTO xp_events (date, kind, points) VALUES (?,?,?)', new Date().toISOString().slice(0, 10), xpKind, points);
+      } catch {
+        // XP is best-effort; badge is already unlocked
+      }
+      setXp((v) => v + points);
+      celebrate(title, emoji);
+    },
+    [db, celebrate],
+  );
+
   const value = useMemo(
-    () => ({ xp, celebrations, addXp, celebrate, unlockBadge, badges }),
-    [xp, celebrations, addXp, celebrate, unlockBadge, badges],
+    () => ({ xp, celebrations, addXp, celebrate, unlockBadge, unlockWithFanfare, badges }),
+    [xp, celebrations, addXp, celebrate, unlockBadge, unlockWithFanfare, badges],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

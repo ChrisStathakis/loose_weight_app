@@ -328,8 +328,9 @@ export default function Plan() {
               <Text style={{ color: colors.ink, fontWeight: '800' }} numberOfLines={1}>{foodName(food, locale)}</Text>
               <View style={{ marginTop: 3 }}><KcalBadge kcal={Math.round((food.calories_per_100g * (food.serving_grams ?? 100)) / 100)} /></View>
             </View>
-            <Pressable onPress={() => addLiked(food)} style={[styles.chip, { marginLeft: 8 }]}>
-              <Text style={styles.chipText}>＋ {t('addLiked')}</Text>
+            <Pressable onPress={() => addLiked(food)} style={[styles.chip, { marginLeft: 8, flexDirection: 'row', gap: 6 }]}>
+              <Ionicons name="add" size={16} color={colors.ink} />
+              <Text style={styles.chipText}>{t('addLiked')}</Text>
             </Pressable>
           </View>
         ))}
@@ -424,8 +425,8 @@ export default function Plan() {
               </View>
             );
           })}
-          <Pressable onPress={save} disabled={saving} style={[styles.button, { marginTop: 14, opacity: saving ? 0.6 : 1 }]}>
-            <Text style={styles.buttonText}>{saving ? '…' : `💾 ${t('savePlan')}`}</Text>
+          <Pressable onPress={save} disabled={saving} style={[styles.button, { marginTop: 14, opacity: saving ? 0.6 : 1, flexDirection: 'row', gap: 8 }]}>
+            {saving ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="save-outline" size={18} color={colors.white} /><Text style={styles.buttonText}>{t('savePlan')}</Text></>)}
           </Pressable>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>{t('groceryNote')}</Text>
         </View>
@@ -470,20 +471,22 @@ export default function Plan() {
               </View>
               {entry.kind === 'food' ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                  <Pressable onPress={() => adjustFoodGrams(entry, -25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
-                    <Text style={styles.outlineText}>−25g</Text>
+                  <Pressable onPress={() => adjustFoodGrams(entry, -25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 4 }]}>
+                    <Ionicons name="remove" size={16} color={colors.green} />
+                    <Text style={styles.outlineText}>25g</Text>
                   </Pressable>
-                  <Pressable onPress={() => adjustFoodGrams(entry, 25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
-                    <Text style={styles.outlineText}>+25g</Text>
+                  <Pressable onPress={() => adjustFoodGrams(entry, 25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 4 }]}>
+                    <Ionicons name="add" size={16} color={colors.green} />
+                    <Text style={styles.outlineText}>25g</Text>
                   </Pressable>
                 </View>
               ) : entry.recipe ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                  <Pressable onPress={() => adjustRecipePortion(entry, -0.25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
-                    <Text style={styles.outlineText}>−</Text>
+                  <Pressable onPress={() => adjustRecipePortion(entry, -0.25)} disabled={entry.locked} accessibilityLabel="−" style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
+                    <Ionicons name="remove" size={18} color={colors.green} />
                   </Pressable>
-                  <Pressable onPress={() => adjustRecipePortion(entry, 0.25)} disabled={entry.locked} style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
-                    <Text style={styles.outlineText}>+</Text>
+                  <Pressable onPress={() => adjustRecipePortion(entry, 0.25)} disabled={entry.locked} accessibilityLabel="+" style={[styles.outlineButton, { minHeight: 36, paddingHorizontal: 14, opacity: entry.locked ? 0.45 : 1 }]}>
+                    <Ionicons name="add" size={18} color={colors.green} />
                   </Pressable>
                   <View style={{ flex: 1 }} />
                   <Text style={{ color: colors.muted, fontWeight: '800' }}>
@@ -492,15 +495,18 @@ export default function Plan() {
                 </View>
               ) : null}
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                <Pressable onPress={() => toggleLock(entry)} style={[styles.chip, entry.locked && styles.chipActive, { flex: 1 }]}>
-                  <Text style={[styles.chipText, entry.locked && styles.chipTextActive]}>{entry.locked ? `🔒 ${t('locked')}` : `🔓 ${t('lock')}`}</Text>
+                <Pressable onPress={() => toggleLock(entry)} style={[styles.chip, entry.locked && styles.chipActive, { flex: 1, flexDirection: 'row', gap: 6 }]}>
+                  <Ionicons name={entry.locked ? 'lock-closed-outline' : 'lock-open-outline'} size={16} color={entry.locked ? colors.white : colors.ink} />
+                  <Text style={[styles.chipText, entry.locked && styles.chipTextActive]}>{entry.locked ? t('locked') : t('lock')}</Text>
                 </Pressable>
                 {entry.kind === 'food' ? (
-                  <Pressable onPress={() => replaceFood(entry)} style={[styles.chip, { flex: 1, opacity: entry.locked ? 0.45 : 1 }]}>
-                    <Text style={styles.chipText}>🎲 {t('replace')}</Text>
+                  <Pressable onPress={() => replaceFood(entry)} style={[styles.chip, { flex: 1, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 6 }]}>
+                    <Ionicons name="shuffle" size={16} color={colors.ink} />
+                    <Text style={styles.chipText}>{t('replace')}</Text>
                   </Pressable>
                 ) : null}
-                <Pressable onPress={() => logMeal(entry)} style={[styles.button, { flex: 1, minHeight: 42, paddingHorizontal: 5 }]}>
+                <Pressable onPress={() => logMeal(entry)} style={[styles.button, { flex: 1, minHeight: 42, paddingHorizontal: 5, flexDirection: 'row', gap: 6 }]}>
+                  <Ionicons name="restaurant-outline" size={17} color={colors.white} />
                   <Text style={[styles.buttonText, { fontSize: 13 }]}>{t('logMeal')}</Text>
                 </Pressable>
               </View>

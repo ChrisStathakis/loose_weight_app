@@ -23,6 +23,18 @@ export function xpForEvent(kind: string): number {
       return 20;
     case 'workout-log':
       return 15;
+    case 'badge-streak':
+      return 60;
+    case 'badge-protein':
+      return 40;
+    case 'badge-macro':
+      return 60;
+    case 'badge-first-workout':
+      return 30;
+    case 'badge-water':
+      return 40;
+    case 'badge-weight':
+      return 30;
     default:
       return 5;
   }

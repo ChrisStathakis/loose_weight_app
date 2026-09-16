@@ -44,6 +44,12 @@ export const BADGES: Badge[] = [
   { id: 'boss-slayer', emoji: '⚔️', name_en: 'Boss Slayer', name_el: 'Εξολοθρευτής', desc_en: 'Defeat a weekly opponent', desc_el: 'Νίκησες τον αντίπαλο της εβδομάδας' },
   { id: 'planner-pro', emoji: '🗓️', name_en: 'Planner Pro', name_el: 'Μάστερ Πλάνου', desc_en: 'Save a meal plan', desc_el: 'Αποθήκευσες πλάνο γευμάτων' },
   { id: 'workout-warrior', emoji: '💪', name_en: 'Workout Warrior', name_el: 'Πολεμιστής', desc_en: 'Work out on 3 days in a week', desc_el: 'Προπονήθηκες 3 ημέρες σε μια εβδομάδα' },
+  { id: 'streak-7', emoji: '📆', name_en: 'Week on Fire', name_el: 'Φωτιά Εβδομάδας', desc_en: '7-day logging streak', desc_el: 'Σερί 7 ημερών' },
+  { id: 'protein-pro', emoji: '🥩', name_en: 'Protein Pro', name_el: 'Πρωτεΐνη Pro', desc_en: 'Hit your protein goal', desc_el: 'Έπιασες τον στόχο πρωτεΐνης' },
+  { id: 'macro-master', emoji: '🍱', name_en: 'Full Plate', name_el: 'Πλήρες Πιάτο', desc_en: 'Hit protein, carbs and fat in one day', desc_el: 'Έπιασες πρωτεΐνη, υδατάνθρακες και λίπος μαζί' },
+  { id: 'first-sweat', emoji: '🌱', name_en: 'First Sweat', name_el: 'Πρώτος Ιδρώτας', desc_en: 'Log your first workout', desc_el: 'Κατέγραψες την πρώτη προπόνηση' },
+  { id: 'aqua-trio', emoji: '🌊', name_en: 'Aqua Trio', name_el: 'Τριάδα Νερού', desc_en: 'Water goal on 3 days in a week', desc_el: 'Στόχος νερού 3 ημέρες σε μια εβδομάδα' },
+  { id: 'scale-buddy', emoji: '⚖️', name_en: 'Scale Buddy', name_el: 'Φίλος Ζυγαριάς', desc_en: 'Log weight 3 times in 30 days', desc_el: 'Κατέγραψες βάρος 3 φορές σε 30 ημέρες' },
 ];
 
 export function opponentForWeek(dateKey: string): Opponent {

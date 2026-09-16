@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -22,7 +23,7 @@ import { AnimatedBar } from '@/src/ui/AnimatedBar';
 export default function Activity() {
   const db = useSQLiteContext();
   const { locale, t } = useApp();
-  const { addXp, unlockBadge, celebrate } = useGamification();
+  const { addXp, unlockBadge, unlockWithFanfare, celebrate } = useGamification();
   const [date, setDate] = useState(dateKey());
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [weekBurned, setWeekBurned] = useState(0);
@@ -104,6 +105,13 @@ export default function Activity() {
           '-6 days',
         );
         if (week.length >= 3) unlockBadge('workout-warrior');
+      } catch {
+        // badge is best-effort
+      }
+      // First Sweat: very first workout ever logged.
+      try {
+        const total = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) as n FROM workouts');
+        if (Number(total?.n ?? 0) === 1) unlockWithFanfare('first-sweat', 'badge-first-workout', locale === 'el' ? 'Πρώτος Ιδρώτας!' : 'First Sweat!', '🌱');
       } catch {
         // badge is best-effort
       }
@@ -234,12 +242,10 @@ export default function Activity() {
         />
         <PressScale
           onPress={save}
-          style={[styles.button, { marginTop: 14, opacity: saving ? 0.6 : 1 }]}
+          style={[styles.button, { marginTop: 14, opacity: saving ? 0.6 : 1, flexDirection: 'row', gap: 6 }]}
           haptic
         >
-          <Text style={styles.buttonText}>
-            {saving ? '…' : `🔥 ${t('addWorkout')} · ${overrideNum} kcal`}
-          </Text>
+          {saving ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="flame-outline" size={18} color={colors.white} /><Text style={styles.buttonText}>{`${t('addWorkout')} · ${overrideNum} kcal`}</Text></>)}
         </PressScale>
       </View>
 
@@ -270,7 +276,7 @@ export default function Activity() {
               </Text>
             </View>
             <PressScale onPress={() => remove(w.id)} hitSlop={10} style={{ padding: 6 }} haptic>
-              <Text style={{ fontSize: 18, color: colors.muted }}>🗑️</Text>
+              <Ionicons name="trash-outline" size={19} color={colors.muted} />
             </PressScale>
           </Animated.View>
         ))
@@ -289,10 +295,10 @@ export default function Activity() {
         ) : null}
         <PressScale
           onPress={syncNow}
-          style={[styles.button, { marginTop: 12, opacity: syncing ? 0.6 : 1 }]}
+          style={[styles.button, { marginTop: 12, opacity: syncing ? 0.6 : 1, flexDirection: 'row', gap: 6 }]}
           haptic
         >
-          <Text style={styles.buttonText}>{syncing ? '…' : `⌚ ${t('syncNow')}`}</Text>
+          {syncing ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="watch-outline" size={18} color={colors.white} /><Text style={styles.buttonText}>{t('syncNow')}</Text></>)}
         </PressScale>
       </GlassCard>
       <View style={{ height: 8 }} />

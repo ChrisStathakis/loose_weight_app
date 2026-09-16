@@ -1,4 +1,6 @@
 import { Food, Recipe } from '@/src/types';
+import { pack2Foods, pack2Recipes } from '@/src/data/pack2';
+import { pack3Foods, pack3Recipes } from '@/src/data/pack3';
 
 const baseFoods: Food[] = [
   ['oats', 'Rolled oats', 'Νιφάδες βρώμης', 389, 16.9, 66.3, 6.9, 40],
@@ -73,9 +75,62 @@ const extraFoodData: Array<[string, string, string, number, number, number, numb
 ];
 
 const extraFoods: Food[] = extraFoodData.map(([id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams]) => ({ id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams, source: 'Daily Plate starter library' }));
-export const seedFoods: Food[] = [...baseFoods, ...extraFoods];
 
-export const seedRecipes: Recipe[] = [
+const greekFoodData: Array<[string, string, string, number, number, number, number, number]> = [
+  ['pork-souvlaki', 'Pork souvlaki skewer', 'Σουβλάκι χοιρινό', 195, 26, 0.5, 9, 100],
+  ['chicken-souvlaki', 'Chicken souvlaki skewer', 'Σουβλάκι κοτόπουλο', 150, 27, 0.5, 4, 100],
+  ['pork-gyros', 'Pork gyros', 'Γύρος χοιρινός', 250, 22, 1, 17, 120],
+  ['chicken-gyros', 'Chicken gyros', 'Γύρος κοτόπουλο', 180, 24, 1, 8, 120],
+  ['beef-steak', 'Grilled beef steak', 'Μπριζόλα μοσχαρίσια', 220, 26, 0, 12, 180],
+  ['pork-steak', 'Grilled pork steak', 'Μπριζόλα χοιρινή', 230, 24, 0, 14, 180],
+  ['bifteki', 'Greek beef bifteki', 'Μπιφτέκι', 210, 20, 4, 12, 120],
+  ['soutzoukakia', 'Soutzoukakia', 'Σουτζουκάκια', 200, 18, 6, 11, 150],
+  ['lamb-chops', 'Grilled lamb chops', 'Παϊδάκια', 280, 22, 0, 21, 150],
+  ['kokoretsi', 'Kokoretsi', 'Κοκορέτσι', 260, 20, 1, 19, 100],
+  ['kontosouvli', 'Kontosouvli', 'Κοντοσούβλι', 270, 22, 0.5, 19, 150],
+  ['village-sausage', 'Greek village sausage', 'Λουκάνικο χωριάτικο', 300, 14, 2, 26, 80],
+  ['tzatziki', 'Tzatziki', 'Τζατζίκι', 90, 4, 4, 7, 50],
+  ['taramosalata', 'Taramosalata', 'Ταραμοσαλάτα', 350, 2, 12, 33, 40],
+  ['melitzanosalata', 'Melitzanosalata', 'Μελιτζανοσαλάτα', 120, 1.5, 6, 10, 60],
+  ['tirokafteri', 'Tirokafteri', 'Τυροκαυτερή', 220, 9, 3, 19, 50],
+  ['skordalia', 'Skordalia', 'Σκορδαλιά', 250, 2, 25, 16, 60],
+  ['fried-potatoes', 'Greek fried potatoes', 'Πατάτες τηγανητές', 320, 4, 38, 17, 150],
+  ['oven-potatoes', 'Lemon oven potatoes', 'Πατάτες φούρνου', 130, 2.5, 22, 4, 180],
+  ['souvlaki-pita', 'Pita bread for souvlaki', 'Πίτα για σουβλάκι', 270, 7, 54, 3, 80],
+  ['barley-rusk', 'Barley rusk', 'Παξιμάδι κρίθινο', 350, 12, 70, 3, 30],
+  ['trahana', 'Trahana (dry)', 'Τραχανάς', 360, 13, 70, 4, 40],
+  ['hilopites-cooked', 'Cooked hilopites', 'Χυλοπίτες μαγειρεμένες', 150, 5, 30, 1.5, 180],
+  ['graviera', 'Graviera', 'Γραβιέρα', 400, 26, 2, 32, 30],
+  ['kaseri', 'Kaseri', 'Κασέρι', 350, 24, 2, 27, 30],
+  ['kefalotyri', 'Kefalotyri', 'Κεφαλοτύρι', 390, 28, 1, 30, 25],
+  ['anthotyro', 'Anthotyro', 'Ανθότυρο', 180, 12, 3, 13, 60],
+  ['mizithra', 'Mizithra', 'Μυζήθρα', 260, 14, 3, 21, 40],
+  ['grilled-octopus', 'Grilled octopus', 'Χταπόδι ψητό', 110, 20, 2, 2, 120],
+  ['fried-calamari', 'Fried calamari', 'Καλαμαράκια τηγανητά', 220, 15, 12, 12, 120],
+  ['sea-bream', 'Sea bream', 'Τσιπούρα', 130, 24, 0, 3, 150],
+  ['sea-bass', 'Sea bass', 'Λαβράκι', 120, 23, 0, 2.5, 150],
+  ['red-mullet', 'Red mullet', 'Μπαρμπούνι', 140, 22, 0, 5, 120],
+  ['gavros', 'Marinated gavros', 'Γαύρος μαρινάτος', 150, 20, 0, 6, 100],
+  ['spanakopita', 'Spanakopita', 'Σπανακόπιτα', 220, 6, 20, 13, 150],
+  ['tiropita', 'Tiropita', 'Τυρόπιτα', 280, 9, 22, 17, 150],
+  ['bougatsa', 'Bougatsa with custard', 'Μπουγάτσα κρέμα', 250, 6, 32, 11, 120],
+  ['baklava', 'Baklava', 'Μπακλαβάς', 430, 7, 48, 25, 60],
+  ['galaktoboureko', 'Galaktoboureko', 'Γαλακτομπούρεκο', 230, 5, 32, 9, 120],
+  ['loukoumades', 'Loukoumades', 'Λουκουμάδες', 350, 5, 45, 17, 100],
+  ['semolina-halva', 'Semolina halva', 'Χαλβάς σιμιγδαλένιος', 280, 4, 50, 8, 100],
+  ['rizogalo', 'Rizogalo', 'Ρυζόγαλο', 120, 3.5, 20, 3, 150],
+  ['pasteli', 'Pasteli', 'Παστέλι', 450, 10, 55, 22, 30],
+  ['kataifi', 'Kataifi', 'Καταΐφι', 400, 7, 50, 20, 60],
+  ['melomakarona', 'Melomakarona', 'Μελομακάρονα', 380, 5, 55, 16, 40],
+  ['kourabies', 'Kourabies', 'Κουραμπιές', 450, 7, 50, 25, 30],
+  ['greek-coffee', 'Greek coffee', 'Ελληνικός καφές', 2, 0.2, 0.3, 0, 60],
+  ['frappe', 'Frappe (plain)', 'Φραπέ σκέτος', 15, 0.5, 3, 0.2, 250],
+];
+
+const greekFoods: Food[] = greekFoodData.map(([id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams]) => ({ id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams, source: 'Daily Plate starter library' }));
+export const seedFoods: Food[] = [...baseFoods, ...extraFoods, ...greekFoods, ...pack2Foods, ...pack3Foods];
+
+const baseSeedRecipes: Recipe[] = [
   {
     id: 'greek-yogurt-bowl', name_en: 'Greek yogurt oat bowl', name_el: 'Μπολ γιαουρτιού με βρώμη', diet: 'vegetarian', servings: 1,
     ingredients: [{ name_en: 'Greek yogurt', name_el: 'Γιαούρτι', amount: 170, unit: 'g' }, { name_en: 'Rolled oats', name_el: 'Βρώμη', amount: 35, unit: 'g' }, { name_en: 'Banana', name_el: 'Μπανάνα', amount: 80, unit: 'g' }, { name_en: 'Honey', name_el: 'Μέλι', amount: 10, unit: 'g' }],
@@ -226,4 +281,26 @@ export const seedRecipes: Recipe[] = [
     ingredients: [{ name_en: 'Chicken breast', name_el: 'Κοτόπουλο', amount: 260, unit: 'g' }, { name_en: 'Potato', name_el: 'Πατάτα', amount: 300, unit: 'g' }, { name_en: 'Lemon', name_el: 'Λεμόνι', amount: 30, unit: 'g' }, { name_en: 'Olive oil', name_el: 'Ελαιόλαδο', amount: 12, unit: 'g' }],
     instructions_en: 'Roast chicken and potato with lemon, oregano, and olive oil.', instructions_el: 'Ψήσε κοτόπουλο και πατάτες με λεμόνι, ρίγανη και ελαιόλαδο.', calories: 490, protein: 42, carbs: 43, fat: 17,
   },
+  {
+    id: 'tzatziki-bowl', name_en: 'Homemade tzatziki', name_el: 'Σπιτικό τζατζίκι', diet: 'vegetarian', servings: 2,
+    ingredients: [{ name_en: 'Greek yogurt', name_el: 'Γιαούρτι', amount: 200, unit: 'g' }, { name_en: 'Cucumber', name_el: 'Αγγούρι', amount: 100, unit: 'g' }, { name_en: 'Olive oil', name_el: 'Ελαιόλαδο', amount: 10, unit: 'g' }, { name_en: 'Garlic', name_el: 'Σκόρδο', amount: 5, unit: 'g' }],
+    instructions_en: 'Grate and squeeze the cucumber, mix with yogurt, garlic, oil, and dill. Chill before serving.', instructions_el: 'Τρίψε και στράγγιξε το αγγούρι, ανακάτεψε με γιαούρτι, σκόρδο, λάδι και άνηθο. Σέρβιρε κρύο.', calories: 250, protein: 21, carbs: 13, fat: 14,
+  },
+  {
+    id: 'souvlaki-pita-wrap', name_en: 'Souvlaki pita wrap', name_el: 'Πίτα σουβλάκι', diet: 'balanced', servings: 1,
+    ingredients: [{ name_en: 'Pita bread for souvlaki', name_el: 'Πίτα για σουβλάκι', amount: 80, unit: 'g' }, { name_en: 'Pork gyros', name_el: 'Γύρος χοιρινός', amount: 120, unit: 'g' }, { name_en: 'Tzatziki', name_el: 'Τζατζίκι', amount: 40, unit: 'g' }, { name_en: 'Tomato', name_el: 'Ντομάτα', amount: 50, unit: 'g' }, { name_en: 'Onion', name_el: 'Κρεμμύδι', amount: 20, unit: 'g' }, { name_en: 'Greek fried potatoes', name_el: 'Πατάτες τηγανητές', amount: 60, unit: 'g' }],
+    instructions_en: 'Warm the pita, fill with gyros, tzatziki, tomato, onion, and fries. Wrap and serve.', instructions_el: 'Ζέστανε την πίτα, γέμισε με γύρο, τζατζίκι, ντομάτα, κρεμμύδι και πατάτες. Τύλιξε και σέρβιρε.', calories: 760, protein: 37, carbs: 73, fat: 36,
+  },
+  {
+    id: 'pastitsio-portion', name_en: 'Pastitsio portion', name_el: 'Παστίτσιο', diet: 'balanced', servings: 1,
+    ingredients: [{ name_en: 'Lean beef', name_el: 'Μοσχάρι', amount: 150, unit: 'g' }, { name_en: 'Wholewheat pasta cooked', name_el: 'Ζυμαρικά ολικής', amount: 200, unit: 'g' }, { name_en: 'Tomato sauce', name_el: 'Σάλτσα ντομάτας', amount: 80, unit: 'g' }, { name_en: 'Semi-skimmed milk', name_el: 'Γάλα με χαμηλά λιπαρά', amount: 60, unit: 'g' }, { name_en: 'Egg', name_el: 'Αυγό', amount: 25, unit: 'g' }, { name_en: 'Parmesan', name_el: 'Παρμεζάνα', amount: 15, unit: 'g' }],
+    instructions_en: 'Layer pasta with spiced beef and tomato, top with milk-egg-parmesan béchamel, and bake until golden.', instructions_el: 'Στρώσε ζυμαρικά με μοσχάρι και ντομάτα, κάλυψε με μπεσαμέλ από γάλα, αυγό και παρμεζάνα και ψήσε.', calories: 710, protein: 62, carbs: 68, fat: 21,
+  },
+  {
+    id: 'bifteki-platter', name_en: 'Bifteki platter', name_el: 'Πιατέλα με μπιφτέκια', diet: 'balanced', servings: 1,
+    ingredients: [{ name_en: 'Greek beef bifteki', name_el: 'Μπιφτέκι', amount: 240, unit: 'g' }, { name_en: 'Lemon oven potatoes', name_el: 'Πατάτες φούρνου', amount: 180, unit: 'g' }, { name_en: 'Tomato', name_el: 'Ντομάτα', amount: 80, unit: 'g' }, { name_en: 'Tzatziki', name_el: 'Τζατζίκι', amount: 40, unit: 'g' }],
+    instructions_en: 'Grill the bifteki and serve with oven potatoes, tomato, and tzatziki.', instructions_el: 'Ψήσε τα μπιφτέκια και σέρβιρε με πατάτες φούρνου, ντομάτα και τζατζίκι.', calories: 790, protein: 55, carbs: 54, fat: 39,
+  },
 ];
+
+export const seedRecipes: Recipe[] = [...baseSeedRecipes, ...pack2Recipes, ...pack3Recipes];

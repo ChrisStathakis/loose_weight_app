@@ -4,11 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View } from 'react-native';
 import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/src/context/AppContext';
 import { colors } from '@/src/theme';
 
 export default function TabsLayout() {
   const { t } = useApp();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
   const screenOptions = useMemo(
     () => ({
       headerShown: false as const,
@@ -18,8 +21,8 @@ export default function TabsLayout() {
         <BlurView intensity={32} tint="light" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,253,247,0.82)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.7)' }]} />
       ),
       tabBarStyle: {
-        height: 78,
-        paddingBottom: 14,
+        height: 64 + bottomInset,
+        paddingBottom: bottomInset,
         paddingTop: 8,
         backgroundColor: 'transparent',
         borderTopWidth: 0,
@@ -28,7 +31,7 @@ export default function TabsLayout() {
       tabBarLabelStyle: { fontSize: 11, fontWeight: '700' as const },
       tabBarIconStyle: { marginTop: 2 },
     }),
-    [],
+    [bottomInset],
   );
   const icon = (on: string, off: string) => ({ color, size, focused }: { color: ColorValue; size: number; focused: boolean }) => (
     <View
@@ -38,9 +41,11 @@ export default function TabsLayout() {
         paddingHorizontal: 14,
         paddingVertical: 4,
         alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 52,
       }}
     >
-      <Ionicons name={(focused ? on : off) as keyof typeof Ionicons.glyphMap} size={size} color={focused ? '#fff' : (color as string)} />
+      <Ionicons name={(focused ? on : off) as keyof typeof Ionicons.glyphMap} size={size ?? 24} color={focused ? '#fff' : (color as string)} />
     </View>
   );
   return (

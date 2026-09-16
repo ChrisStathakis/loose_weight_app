@@ -126,7 +126,7 @@ export default function Today() {
   const netCalories = Math.max(0, totals.calories - burned);
   const remaining = Math.max(0, Math.round(settings.calorie_goal - netCalories));
   const mood = netCalories >= settings.calorie_goal ? t('goalHit') : netCalories >= settings.calorie_goal * 0.5 ? t('almostThere') : t('freshStart');
-  const { addXp, unlockBadge, celebrate } = useGamification();
+  const { addXp, unlockBadge, unlockWithFanfare, celebrate } = useGamification();
   const goalHitRef = useRef(false);
   const waterHitRef = useRef(false);
 
@@ -154,6 +154,26 @@ export default function Today() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [netCalories]);
 
+  // Streak badges (also fixes dead 'streak-3' which was never unlocked).
+  useEffect(() => {
+    if (streak >= 3) unlockWithFanfare('streak-3', 'badge-streak', locale === 'el' ? 'Φωτιά! Σερί 3 ημερών' : 'On Fire! 3-day streak', '🔥');
+    if (streak >= 7) unlockWithFanfare('streak-7', 'badge-streak', locale === 'el' ? 'Φωτιά Εβδομάδας! Σερί 7 ημερών' : 'Week on Fire! 7-day streak', '📆');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streak]);
+
+  // Nutrition mastery badges.
+  useEffect(() => {
+    if (totals.calories <= 0) return;
+    const proteinHit = totals.protein >= settings.protein_goal && settings.protein_goal > 0;
+    if (proteinHit) unlockWithFanfare('protein-pro', 'badge-protein', locale === 'el' ? 'Πρωτεΐνη Pro!' : 'Protein Pro!', '🥩');
+    const macroHit =
+      proteinHit &&
+      totals.carbs >= settings.carbs_goal && settings.carbs_goal > 0 &&
+      totals.fat >= settings.fat_goal && settings.fat_goal > 0;
+    if (macroHit) unlockWithFanfare('macro-master', 'badge-macro', locale === 'el' ? 'Πλήρες Πιάτο!' : 'Full Plate!', '🍱');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totals, settings]);
+
   const remove = useCallback((id: number) => Alert.alert(t('delete'), t('delete'), [{ text: t('cancel'), style: 'cancel' }, { text: t('delete'), style: 'destructive', onPress: async () => { await db.runAsync('DELETE FROM diary_entries WHERE id=?', id); load(); } }]), [db, load, t]);
   const copyEntry = useCallback(async (entry: DiaryEntry) => { await db.runAsync('INSERT INTO diary_entries (date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat,source) VALUES (?,?,?,?,?,?,?,?,?,?)', date, entry.meal_type, entry.food_id, entry.food_name, entry.portion_grams, entry.calories, entry.protein, entry.carbs, entry.fat, 'Copied diary entry'); addXp('log-food'); load(); }, [db, date, load, addXp]);
   const startEdit = useCallback((entry: DiaryEntry) => { setEditing(entry); setEditPortion(String(entry.portion_grams)); }, []);
@@ -169,6 +189,16 @@ export default function Today() {
       unlockBadge('hydrated');
     }
     if (next < WATER_GOAL) waterHitRef.current = false;
+    // Aqua Trio: water goal on 3 distinct days in the last 7.
+    try {
+      const row = await db.getFirstAsync<{ n: number }>(
+        'SELECT COUNT(DISTINCT date) as n FROM water_entries WHERE ml >= ? AND date >= date(?, ?)',
+        WATER_GOAL, date, '-6 days',
+      );
+      if (Number(row?.n ?? 0) >= 3) unlockWithFanfare('aqua-trio', 'badge-water', locale === 'el' ? 'Τριάδα Νερού!' : 'Aqua Trio!', '🌊');
+    } catch {
+      // badge is best-effort
+    }
     appliedSig.current = null; // force next focus load to pick up the change
   };
   const openAdd = useCallback((meal: MealType) => router.push({ pathname: '/add-food', params: { date, meal } }), [router, date]);
@@ -315,8 +345,8 @@ export default function Today() {
             <Text style={styles.label}>{t('portion')} ({t('grams')})</Text>
             <TextInput style={styles.input} value={editPortion} onChangeText={setEditPortion} keyboardType="decimal-pad" />
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-              <Pressable onPress={() => setEditing(null)} style={[styles.outlineButton, { flex: 1 }]}><Text style={styles.outlineText}>{t('cancel')}</Text></Pressable>
-              <Pressable onPress={saveEdit} style={[styles.button, { flex: 1 }]}><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
+              <Pressable onPress={() => setEditing(null)} style={[styles.outlineButton, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="close-outline" size={17} color={colors.green} /><Text style={styles.outlineText}>{t('cancel')}</Text></Pressable>
+              <Pressable onPress={saveEdit} style={[styles.button, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="checkmark" size={17} color={colors.white} /><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
             </View>
           </View>
         )}

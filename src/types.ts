@@ -104,7 +104,7 @@ export type Opponent = {
   weakness_el: string;
 };
 
-export type BadgeId = 'streak-3' | 'goal-crusher' | 'hydrated' | 'boss-slayer' | 'planner-pro' | 'workout-warrior';
+export type BadgeId = 'streak-3' | 'goal-crusher' | 'hydrated' | 'boss-slayer' | 'planner-pro' | 'workout-warrior' | 'streak-7' | 'protein-pro' | 'macro-master' | 'first-sweat' | 'aqua-trio' | 'scale-buddy';
 
 export type Badge = {
   id: BadgeId;

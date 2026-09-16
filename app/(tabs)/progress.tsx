@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -55,6 +56,7 @@ function BadgeShelf() {
 export default function Progress() {
   const db = useSQLiteContext();
   const { settings, locale, t } = useApp();
+  const { unlockWithFanfare } = useGamification();
   const [days, setDays] = useState<Day[]>([]);
   const [weights, setWeights] = useState<{ date: string; kilograms: number }[]>([]);
   const [weight, setWeight] = useState('');
@@ -87,7 +89,7 @@ export default function Progress() {
   const latestWeight = weights[0];
   const firstWeight = weights[weights.length - 1];
   const delta = latestWeight && firstWeight ? latestWeight.kilograms - firstWeight.kilograms : 0;
-  const saveWeight = async () => { const value = parseNumber(weight); if (!value) return; await db.runAsync('INSERT OR REPLACE INTO weights (date,kilograms) VALUES (?,?)', today, value); setWeight(''); load(); };
+  const saveWeight = async () => { const value = parseNumber(weight); if (!value) return; await db.runAsync('INSERT OR REPLACE INTO weights (date,kilograms) VALUES (?,?)', today, value); setWeight(''); load(); try { const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) as n FROM weights WHERE date >= date(?, ?)', today, '-29 days'); if (Number(row?.n ?? 0) >= 3) unlockWithFanfare('scale-buddy', 'badge-weight', locale === 'el' ? 'Φίλος Ζυγαριάς!' : 'Scale Buddy!', '⚖️'); } catch { /* badge is best-effort */ } };
   const stats = useMemo(() => {
     const active = days.filter((d) => d.calories > 0);
     const avg = (f: (d: Day) => number) => (active.length ? active.reduce((a, d) => a + f(d), 0) / active.length : 0);
@@ -208,7 +210,7 @@ export default function Progress() {
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
           <TextInput value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder={t('kilograms')} placeholderTextColor={colors.muted} style={[styles.input, { flex: 1 }]} />
-          <Pressable onPress={saveWeight} style={[styles.button, { minHeight: 50, paddingHorizontal: 20 }]}><Text style={styles.buttonText}>+ {t('addWeight')}</Text></Pressable>
+          <Pressable onPress={saveWeight} style={[styles.button, { minHeight: 50, paddingHorizontal: 20, flexDirection: 'row', gap: 6 }]}><Ionicons name="add" size={18} color={colors.white} /><Text style={styles.buttonText}>{t('addWeight')}</Text></Pressable>
         </View>
       </View>
     </ScrollView>

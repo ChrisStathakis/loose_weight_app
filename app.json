@@ -10,6 +10,7 @@
     "scheme": "dailyplate",
     "android": {
       "package": "com.dailyplate.app",
+      "minSdkVersion": 26,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#F3EBDD"

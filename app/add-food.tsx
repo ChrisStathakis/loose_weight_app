@@ -233,7 +233,7 @@ export default function AddFood() {
             <View style={[styles.content, { paddingBottom: 8 }]}>
               <SearchHeader placeholder={t('searchFoods')} onText={handleAppliedQuery} />
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                <Pressable onPress={searchOnline} style={[styles.outlineButton, { flex: 1 }]}><Text style={styles.outlineText}>{onlineLoading ? '…' : t('searchOnline')}</Text></Pressable>
+                <Pressable onPress={searchOnline} style={[styles.outlineButton, { flex: 1, flexDirection: 'row', gap: 6 }]}>{onlineLoading ? <Text style={styles.outlineText}>…</Text> : (<><Ionicons name="globe-outline" size={18} color={colors.green} /><Text style={styles.outlineText}>{t('searchOnline')}</Text></>)}</Pressable>
                 <Pressable onPress={scan} style={[styles.outlineButton, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="barcode-outline" size={19} color={colors.green} /><Text style={styles.outlineText}>{t('scanBarcode')}</Text></Pressable>
               </View>
               <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>{t('onlineAttribution')}</Text>
@@ -246,8 +246,9 @@ export default function AddFood() {
                 ))}
               </View>
 
-              <Pressable onPress={() => setCustomOpen((value) => !value)} style={{ paddingVertical: 14 }}>
-                <Text style={{ color: colors.green, fontWeight: '800' }}>＋ {t('manualFood')}</Text>
+              <Pressable onPress={() => setCustomOpen((value) => !value)} style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name={customOpen ? 'chevron-up' : 'add'} size={18} color={colors.green} />
+                <Text style={{ color: colors.green, fontWeight: '800' }}>{t('manualFood')}</Text>
               </Pressable>
               {customOpen && (
                 <View style={styles.card}>
@@ -255,7 +256,7 @@ export default function AddFood() {
                   {[['name', t('recipeName')], ['calories', `${t('calories')} / 100g`], ['protein', `${t('protein')} / 100g`], ['carbs', `${t('carbs')} / 100g`], ['fat', `${t('fat')} / 100g`]].map(([key, label]) => (
                     <TextInput key={key} value={custom[key as keyof typeof custom]} onChangeText={(value) => setCustom((current) => ({ ...current, [key]: value }))} placeholder={label} placeholderTextColor={colors.muted} keyboardType={key === 'name' ? 'default' : 'decimal-pad'} style={[styles.input, { marginBottom: 8 }]} />
                   ))}
-                  <Pressable onPress={saveCustom} style={styles.button}><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
+                  <Pressable onPress={saveCustom} style={[styles.button, { flexDirection: 'row', gap: 6 }]}><Ionicons name="checkmark" size={18} color={colors.white} /><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
                 </View>
               )}
             </View>
@@ -301,8 +302,8 @@ export default function AddFood() {
                   </View>
                   <TextInput style={[styles.input, { marginTop: 10 }]} value={portion} onChangeText={setPortion} keyboardType="decimal-pad" placeholder={`${t('grams')}`} placeholderTextColor={colors.muted} />
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                    <Pressable onPress={() => setSelected(null)} style={[styles.outlineButton, { flex: 1 }]}><Text style={styles.outlineText}>{t('cancel')}</Text></Pressable>
-                    <Pressable onPress={logSelected} disabled={logging} style={[styles.button, { flex: 2, opacity: logging ? 0.6 : 1, borderRadius: radius.lg }]}><Text style={styles.buttonText}>{logging ? '…' : `${t('logFood')} · ${Math.round(previewKcal)} kcal`}</Text></Pressable>
+                    <Pressable onPress={() => setSelected(null)} style={[styles.outlineButton, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="close-outline" size={17} color={colors.green} /><Text style={styles.outlineText}>{t('cancel')}</Text></Pressable>
+                    <Pressable onPress={logSelected} disabled={logging} style={[styles.button, { flex: 2, opacity: logging ? 0.6 : 1, borderRadius: radius.lg, flexDirection: 'row', gap: 6 }]}>{logging ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="book-outline" size={17} color={colors.white} /><Text style={styles.buttonText}>{`${t('logFood')} · ${Math.round(previewKcal)} kcal`}</Text></>)}</Pressable>
                   </View>
                 </View>
               ) : <View style={{ height: 8 }} />
