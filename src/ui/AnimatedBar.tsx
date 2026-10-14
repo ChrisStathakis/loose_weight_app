@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import { colors } from '@/src/theme';
+import { useAppTheme } from '@/src/theme';
 
 export function AnimatedBar({
   ratio,
-  color = colors.green,
+  color,
   height = 6,
   delay = 0,
-  track = 'rgba(0,0,0,0.08)',
+  track,
 }: {
   ratio: number;
   color?: string;
@@ -16,6 +16,9 @@ export function AnimatedBar({
   delay?: number;
   track?: string;
 }) {
+  const { colors } = useAppTheme();
+  const barColor = color ?? colors.green;
+  const trackColor = track ?? colors.trackBg;
   const w = useSharedValue(0);
   useEffect(() => {
     w.value = withDelay(delay, withTiming(Math.max(0, Math.min(1, ratio)), { duration: 700 }));
@@ -23,8 +26,8 @@ export function AnimatedBar({
   }, [ratio]);
   const style = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
   return (
-    <View style={{ height, borderRadius: height, backgroundColor: track, overflow: 'hidden' }}>
-      <Animated.View style={[{ height: '100%', backgroundColor: color, borderRadius: height }, style]} />
+    <View style={{ height, borderRadius: height, backgroundColor: trackColor, overflow: 'hidden' }}>
+      <Animated.View style={[{ height: '100%', backgroundColor: barColor, borderRadius: height }, style]} />
     </View>
   );
 }

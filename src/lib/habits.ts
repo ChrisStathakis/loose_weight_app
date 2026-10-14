@@ -29,8 +29,8 @@ export function calcStreak(loggedDates: string[], todayKey: string): { current: 
   return { current, best };
 }
 
-import { Locale } from '@/src/types';
-import { tFor } from '@/src/lib/i18n';
+import type { Locale } from '../types';
+import { tFor } from './i18n';
 
 export function greeting(hour = new Date().getHours(), locale: Locale = 'en'): string {
   if (hour < 11) return tFor(locale, 'morning');

@@ -1,4 +1,4 @@
-import { Food, Recipe } from '@/src/types';
+import type { Food, Recipe } from '../types';
 
 // Batch 1: Greek & Mediterranean extension (~50 foods + ~50 recipes).
 // Values are typical averages per 100g (foods) / per serving (recipes).

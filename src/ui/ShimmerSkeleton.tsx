@@ -8,9 +8,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { radius } from '@/src/theme';
+import { radius, useAppTheme } from '@/src/theme';
 
 export function ShimmerSkeleton({ height = 86 }: { height?: number }) {
+  const { colors } = useAppTheme();
   const x = useSharedValue(-1);
   useEffect(() => {
     x.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.ease) }), -1, false);
@@ -26,14 +27,14 @@ export function ShimmerSkeleton({ height = 86 }: { height?: number }) {
         marginTop: 14,
         minHeight: height,
         borderRadius: radius.lg,
-        backgroundColor: '#F1E8D4',
+        backgroundColor: colors.skeletonBg,
         overflow: 'hidden',
         justifyContent: 'center',
         padding: 16,
       }}
     >
-      <View style={{ height: 12, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.08)', width: '45%' }} />
-      <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(0,0,0,0.06)', width: '70%', marginTop: 8 }} />
+      <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.trackBg, width: '45%' }} />
+      <View style={{ height: 10, borderRadius: 5, backgroundColor: colors.trackBg, width: '70%', marginTop: 8 }} />
       <Animated.View
         style={[
           { position: 'absolute', top: 0, bottom: 0, width: 120 },

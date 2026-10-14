@@ -1,6 +1,22 @@
 export type Locale = 'en' | 'el';
-export type Diet = 'balanced' | 'vegetarian' | 'vegan';
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type Diet =
+  | 'balanced'
+  | 'vegetarian'
+  | 'vegan'
+  | 'mediterranean'
+  | 'high-protein'
+  | 'low-carb'
+  | 'keto'
+  | 'paleo'
+  | 'gluten-free';
+export type MealType = 'breakfast' | 'brunch' | 'snack' | 'lunch' | 'snack2' | 'dinner' | 'snack3';
+
+export type MicroNutrient = {
+  nutrient: string;
+  amount: number;
+  unit: string;
+};
 
 export type Food = {
   id: string;
@@ -15,6 +31,8 @@ export type Food = {
   serving_grams?: number | null;
   source: string;
   is_favorite?: number | null;
+  /** Per-100g micronutrients, in memory only (persisted in food_micronutrients). */
+  micros?: MicroNutrient[] | null;
 };
 
 export type RecipeIngredient = {
@@ -48,6 +66,11 @@ export type Settings = {
   diet: Diet;
   excluded: string[];
   onboarding_complete: boolean;
+  height_cm: number | null;
+  birth_date: string;
+  weight_kg: number | null;
+  target_weight_kg: number | null;
+  theme: ThemeMode;
 };
 
 export type DiaryEntry = {
@@ -82,12 +105,53 @@ export type PlanEntry = {
   food?: Food;
 };
 
+export type GroceryCategory =
+  | 'produce'
+  | 'dairy'
+  | 'meat'
+  | 'bakery'
+  | 'pantry'
+  | 'frozen'
+  | 'other';
+
+export type GrocerySource = 'auto' | 'manual';
+
 export type GroceryItem = {
   id: number;
   ingredient: string;
   amount: number;
   unit: string;
   checked: boolean;
+  /** Line-total price in the user's currency, entered manually. */
+  price: number;
+  /** Store/source label for the active price ('' when unset). */
+  priceStore: string;
+  category: GroceryCategory;
+  source: GrocerySource;
+};
+
+export type GroceryPriceOption = {
+  id: number;
+  itemKey: string;
+  store: string;
+  price: number;
+  updatedAt: string;
+};
+
+export type FoodPriceOption = {
+  id: number;
+  foodId: string;
+  store: string;
+  price: number;
+  updatedAt: string;
+};
+
+export type RecipePriceOption = {
+  id: number;
+  recipeId: string;
+  store: string;
+  price: number;
+  updatedAt: string;
 };
 
 export type OpponentId = 'sugar-gremlin' | 'snack-kraken' | 'couch-sloth';

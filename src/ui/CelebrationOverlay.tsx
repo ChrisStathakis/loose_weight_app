@@ -3,7 +3,7 @@ import { Dimensions, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useGamification } from '@/src/context/GamificationContext';
-import { colors, radius } from '@/src/theme';
+import { radius, useAppTheme } from '@/src/theme';
 
 const W = Dimensions.get('window').width;
 const COLORS = ['#FFC93C', '#E86A7C', '#5AA9E6', '#8E6CC8', '#1E7A4F', '#FF8A3D', '#C6F135'];
@@ -42,6 +42,7 @@ function Piece({ index, go }: { index: number; go: number }) {
 
 export function CelebrationOverlay() {
   const { celebrations } = useGamification();
+  const { colors } = useAppTheme();
   const top = celebrations[celebrations.length - 1];
   const go = top?.id ?? 0;
   const opacity = useSharedValue(0);

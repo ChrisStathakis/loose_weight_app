@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Text, View } from 'react-native';
-import { colors, radius } from '@/src/theme';
+import { radius, useAppTheme } from '@/src/theme';
 
 const SIZE = 148;
 const R = 60;
 const C = SIZE / 2;
 
-type SkiaApi = typeof import('@shopify/react-native-skia') | null;
+// Optional, lazy-loaded: never a static import, so the package stays
+// out of package.json and Expo Go keeps working (fallback below).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SkiaApi = any;
 
 let skiaCache: SkiaApi = null;
 let skiaTried = false;
@@ -34,6 +37,7 @@ export function AnimatedRing({
   goal: number;
   goalLabel: string;
 }) {
+  const { colors } = useAppTheme();
   const ratio = goal > 0 ? Math.min(value / goal, 1) : 0;
   const over = goal > 0 && value > goal * 1.1;
   const ringColor = over ? colors.tangerine : colors.lemon;

@@ -1,4 +1,4 @@
-import { Food, Recipe } from '@/src/types';
+import type { Food, Recipe } from '../types';
 
 // Batch 2: breakfast + snacks + quick budget international (~8 foods + ~105 recipes).
 // Values are typical averages per 100g (foods) / per serving (recipes).

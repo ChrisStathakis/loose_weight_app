@@ -1,0 +1,17 @@
+site_name: Daily Plate
+site_dir: site
+use_directory_urls: false
+theme:
+  name: mkdocs
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Today and food diary: user-guide.md
+  - Meal planning: meal-planning.md
+  - Groceries: groceries.md
+  - Activity: activity.md
+  - Progress: progress.md
+  - Settings and data: settings-data.md
+  - Architecture: architecture.md
+  - Health Connect spike: health-connect-spike.md
+  - Phone handoff: phone-handoff.md

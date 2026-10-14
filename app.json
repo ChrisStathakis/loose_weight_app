@@ -4,20 +4,30 @@
     "slug": "daily-plate",
     "version": "1.0.0",
     "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "platforms": [
       "android"
     ],
     "scheme": "dailyplate",
     "android": {
       "package": "com.dailyplate.app",
-      "minSdkVersion": 26,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F3EBDD"
       }
     },
     "plugins": [
       "expo-router",
+      "expo-splash-screen",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1E7A4F"
+        }
+      ],
       [
         "expo-camera",
         {
@@ -29,7 +39,15 @@
       "react-native-health-connect",
       "expo-localization",
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

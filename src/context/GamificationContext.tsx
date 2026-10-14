@@ -85,8 +85,11 @@ export function GamificationProvider({ children }: PropsWithChildren) {
       if (badgesRef.current.includes(id)) return;
       try {
         const res = await db.runAsync('INSERT OR IGNORE INTO badges (id, unlocked_at) VALUES (?,?)', id, new Date().toISOString());
-        if (res.changes === 0 && badgesRef.current.includes(id)) return;
+        // INSERT OR IGNORE is the source of truth: changes === 0 means the
+        // badge already exists (restored backup, concurrent call). Sync state
+        // and award nothing — never double-pay XP or replay the fanfare.
         setBadges((b) => (b.includes(id) ? b : [...b, id]));
+        if (res.changes === 0) return;
       } catch {
         return;
       }

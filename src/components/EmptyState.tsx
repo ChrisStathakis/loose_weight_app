@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native';
-import { colors, radius } from '@/src/theme';
+import { radius, useAppTheme } from '@/src/theme';
 
 export function EmptyState({ emoji, title, body }: { emoji: string; title: string; body?: string }) {
+  const { colors } = useAppTheme();
   return (
     <View style={{ alignItems: 'center', paddingVertical: 26, paddingHorizontal: 12 }}>
       <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }}>

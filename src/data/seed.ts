@@ -1,6 +1,7 @@
-import { Food, Recipe } from '@/src/types';
-import { pack2Foods, pack2Recipes } from '@/src/data/pack2';
-import { pack3Foods, pack3Recipes } from '@/src/data/pack3';
+import type { Food, Recipe } from '../types';
+import { pack2Foods, pack2Recipes } from './pack2';
+import { pack3Foods, pack3Recipes } from './pack3';
+import { pack4Foods, pack4Recipes } from './pack4';
 
 const baseFoods: Food[] = [
   ['oats', 'Rolled oats', 'Νιφάδες βρώμης', 389, 16.9, 66.3, 6.9, 40],
@@ -128,7 +129,7 @@ const greekFoodData: Array<[string, string, string, number, number, number, numb
 ];
 
 const greekFoods: Food[] = greekFoodData.map(([id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams]) => ({ id, name_en, name_el, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, serving_grams, source: 'Daily Plate starter library' }));
-export const seedFoods: Food[] = [...baseFoods, ...extraFoods, ...greekFoods, ...pack2Foods, ...pack3Foods];
+export const seedFoods: Food[] = [...baseFoods, ...extraFoods, ...greekFoods, ...pack2Foods, ...pack3Foods, ...pack4Foods];
 
 const baseSeedRecipes: Recipe[] = [
   {
@@ -303,4 +304,4 @@ const baseSeedRecipes: Recipe[] = [
   },
 ];
 
-export const seedRecipes: Recipe[] = [...baseSeedRecipes, ...pack2Recipes, ...pack3Recipes];
+export const seedRecipes: Recipe[] = [...baseSeedRecipes, ...pack2Recipes, ...pack3Recipes, ...pack4Recipes];

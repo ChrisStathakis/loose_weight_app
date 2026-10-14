@@ -1,9 +1,10 @@
 import { Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Opponent } from '@/src/types';
-import { colors, radius } from '@/src/theme';
+import { useApp } from '@/src/context/AppContext';
+import { radius, useAppTheme } from '@/src/theme';
 import { AnimatedBar } from '@/src/ui/AnimatedBar';
 import { PressScale } from '@/src/ui/PressScale';
 
@@ -22,9 +23,17 @@ export function OpponentCard({
   defeated: boolean;
   onPress?: () => void;
 }) {
+  const { locale, t } = useApp();
+  const { colors } = useAppTheme();
+  const name = (locale === 'el' ? opponent.name_el : opponent.name_en) || opponent.name_en;
   const shake = useSharedValue(0);
+  const prevHp = useRef(hp);
   useEffect(() => {
-    shake.value = withSpring(0);
+    // Hit wobble only when HP actually drops; mount and heals stay still.
+    if (hp < prevHp.current) {
+      shake.value = withSequence(withSpring(-12, { damping: 6 }), withSpring(0, { damping: 8 }));
+    }
+    prevHp.current = hp;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hp]);
   const wobble = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
@@ -40,16 +49,16 @@ export function OpponentCard({
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>
-                  {defeated ? `${opponent.name_en} defeated!` : `VS ${opponent.name_en}`}
+                  {defeated ? `${name}${t('defeatedSuffix')}` : `${t('versus')} ${name}`}
                 </Text>
                 <View style={{ backgroundColor: defeated ? colors.neonLime : 'rgba(255,255,255,0.2)', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 }}>
                   <Text style={{ fontSize: 11, fontWeight: '900', color: defeated ? colors.inkDeep : '#fff' }}>
-                    {defeated ? 'SLAYED ⚔️' : `HP ${hp}/${maxHp}`}
+                    {defeated ? t('slayed') : `HP ${hp}/${maxHp}`}
                   </Text>
                 </View>
               </View>
               <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 3, fontWeight: '600' }} numberOfLines={2}>
-                {defeated ? 'Legendary. A new rival arrives next week.' : `“${taunt}”`}
+                {defeated ? t('newRival') : `“${taunt}”`}
               </Text>
               <View style={{ marginTop: 8 }}>
                 <AnimatedBar ratio={hp / Math.max(1, maxHp)} color={defeated ? colors.neonLime : colors.goldBright} height={8} track="rgba(0,0,0,0.3)" />

@@ -1,4 +1,4 @@
-import { WorkoutType } from '@/src/types';
+import type { WorkoutType } from '../types';
 
 export const WORKOUT_METS: Record<WorkoutType, number> = {
   walk: 3.5,

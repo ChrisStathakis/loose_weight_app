@@ -6,10 +6,11 @@ import { StyleSheet, View } from 'react-native';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/src/context/AppContext';
-import { colors } from '@/src/theme';
+import { radius, useAppTheme } from '@/src/theme';
 
 export default function TabsLayout() {
   const { t } = useApp();
+  const { colors, scheme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 8);
   const screenOptions = useMemo(
@@ -18,7 +19,7 @@ export default function TabsLayout() {
       tabBarActiveTintColor: colors.greenDeep,
       tabBarInactiveTintColor: colors.muted,
       tabBarBackground: () => (
-        <BlurView intensity={32} tint="light" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,253,247,0.82)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.7)' }]} />
+        <BlurView intensity={32} tint={scheme === 'dark' ? 'dark' : 'light'} style={[StyleSheet.absoluteFill, { backgroundColor: colors.tabBarBg, borderTopWidth: 1, borderTopColor: colors.tabBarBorder }]} />
       ),
       tabBarStyle: {
         height: 64 + bottomInset,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
@@ -7,7 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
-import { colors, gradients, radius, styles } from '@/src/theme';
+import { gradients, radius, useAppTheme } from '@/src/theme';
 import { parseNumber } from '@/src/lib/nutrition';
 import { WORKOUT_EMOJI, WORKOUT_TYPES, estimateForWorkout } from '@/src/lib/activity';
 import { checkHealthAvailability, getLastSync, syncHealthConnect } from '@/src/lib/healthSync';
@@ -23,6 +23,7 @@ import { AnimatedBar } from '@/src/ui/AnimatedBar';
 export default function Activity() {
   const db = useSQLiteContext();
   const { locale, t } = useApp();
+  const { colors, styles } = useAppTheme();
   const { addXp, unlockBadge, unlockWithFanfare, celebrate } = useGamification();
   const [date, setDate] = useState(dateKey());
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -124,7 +125,7 @@ export default function Activity() {
   };
 
   const remove = (id: number) => {
-    Alert.alert(t('deleteWorkout'), t('deleteWorkout'), [
+    Alert.alert(t('deleteWorkout'), t('deleteWorkoutConfirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('delete'),
@@ -206,6 +207,25 @@ export default function Activity() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>＋ {t('logWorkout')}</Text>
+        <Text style={styles.label}>{t('quickTemplates')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {([
+            { ty: 'walk', min: '30' },
+            { ty: 'run', min: '20' },
+            { ty: 'strength', min: '45' },
+            { ty: 'yoga', min: '30' },
+          ] as const).map((q) => (
+            <Pressable
+              key={`${q.ty}-${q.min}`}
+              onPress={() => { setWtype(q.ty); setMinutes(q.min); }}
+              style={[styles.chip, wtype === q.ty && minutes === q.min && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, wtype === q.ty && minutes === q.min && styles.chipTextActive]}>
+                {WORKOUT_EMOJI[q.ty]} {typeName(q.ty)} · {q.min}′
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         <Text style={styles.label}>{t('workoutType')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {WORKOUT_TYPES.map((ty) => (
@@ -245,7 +265,7 @@ export default function Activity() {
           style={[styles.button, { marginTop: 14, opacity: saving ? 0.6 : 1, flexDirection: 'row', gap: 6 }]}
           haptic
         >
-          {saving ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="flame-outline" size={18} color={colors.white} /><Text style={styles.buttonText}>{`${t('addWorkout')} · ${overrideNum} kcal`}</Text></>)}
+          {saving ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="flame-outline" size={18} color={colors.onGreen} /><Text style={styles.buttonText}>{`${t('addWorkout')} · ${overrideNum} kcal`}</Text></>)}
         </PressScale>
       </View>
 
@@ -275,7 +295,7 @@ export default function Activity() {
                 {w.distance_m != null && Number(w.distance_m) > 0 ? ` · ${(Number(w.distance_m) / 1000).toFixed(1)} km` : ''}
               </Text>
             </View>
-            <PressScale onPress={() => remove(w.id)} hitSlop={10} style={{ padding: 6 }} haptic>
+            <PressScale onPress={() => remove(w.id)} hitSlop={10} style={{ padding: 6 }} haptic accessibilityLabel={`${typeName((w.type as WorkoutType) ?? 'other')} delete`} accessibilityRole="button">
               <Ionicons name="trash-outline" size={19} color={colors.muted} />
             </PressScale>
           </Animated.View>
@@ -298,7 +318,7 @@ export default function Activity() {
           style={[styles.button, { marginTop: 12, opacity: syncing ? 0.6 : 1, flexDirection: 'row', gap: 6 }]}
           haptic
         >
-          {syncing ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="watch-outline" size={18} color={colors.white} /><Text style={styles.buttonText}>{t('syncNow')}</Text></>)}
+          {syncing ? <Text style={styles.buttonText}>…</Text> : (<><Ionicons name="watch-outline" size={18} color={colors.onGreen} /><Text style={styles.buttonText}>{t('syncNow')}</Text></>)}
         </PressScale>
       </GlassCard>
       <View style={{ height: 8 }} />

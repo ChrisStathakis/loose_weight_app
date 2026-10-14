@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +13,7 @@ import { calcStreak, foodEmoji, greeting } from '@/src/lib/habits';
 import { computeBossHp } from '@/src/lib/opponents';
 import { opponentForWeek } from '@/src/data/opponents';
 import { DiaryEntry, MealType } from '@/src/types';
-import { colors, gradients, radius, styles } from '@/src/theme';
+import { gradients, radius, useAppTheme } from '@/src/theme';
 import { DateStepper } from '@/src/components/DateStepper';
 import { AnimatedRing } from '@/src/ui/AnimatedRing';
 import { GradientHero } from '@/src/ui/GradientHero';
@@ -23,9 +23,10 @@ import { OpponentCard } from '@/src/ui/OpponentCard';
 import { XPBadge } from '@/src/ui/XPBadge';
 import { MacroPill, StreakChip } from '@/src/components/MacroPill';
 import { EmptyState } from '@/src/components/EmptyState';
+import { DetailSheet, type DetailTarget } from '@/src/components/DetailSheet';
 
-const mealTypes: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const mealEmoji: Record<MealType, string> = { breakfast: '🍳', lunch: '🥗', dinner: '🍲', snack: '🍎' };
+const mealTypes: MealType[] = ['breakfast', 'brunch', 'snack', 'lunch', 'snack2', 'dinner', 'snack3'];
+const mealEmoji: Record<MealType, string> = { breakfast: '🍳', brunch: '🥐', snack: '🍎', lunch: '🥗', snack2: '🍌', dinner: '🍲', snack3: '🌙' };
 const WATER_GOAL = 2000;
 
 const EntryRow = memo(function EntryRow({
@@ -33,6 +34,7 @@ const EntryRow = memo(function EntryRow({
   onEdit,
   onCopy,
   onRemove,
+  onDetail,
   gramsLabel,
   index,
 }: {
@@ -40,9 +42,11 @@ const EntryRow = memo(function EntryRow({
   onEdit: (e: DiaryEntry) => void;
   onCopy: (e: DiaryEntry) => void;
   onRemove: (id: number) => void;
+  onDetail: (e: DiaryEntry) => void;
   gramsLabel: string;
   index: number;
 }) {
+  const { colors, styles } = useAppTheme();
   return (
     <Animated.View entering={FadeInUp.delay(Math.min(index, 6) * 60).duration(350)} layout={Layout.springify()} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 10 }}>
       <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.tangerineSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -52,19 +56,22 @@ const EntryRow = memo(function EntryRow({
         <Text style={{ color: colors.ink, fontWeight: '800' }}>{entry.food_name}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>{Math.round(entry.portion_grams)}{gramsLabel} · {Math.round(entry.calories)} kcal</Text>
       </Pressable>
-      <Pressable onPress={() => onCopy(entry)} hitSlop={10}><Ionicons name="copy-outline" size={19} color={colors.muted} /></Pressable>
-      <Pressable onPress={() => onRemove(entry.id)} hitSlop={10} style={{ marginLeft: 12 }}><Ionicons name="trash-outline" size={19} color={colors.muted} /></Pressable>
+      <Pressable onPress={() => onDetail(entry)} hitSlop={10} accessibilityLabel={`${entry.food_name} details`} accessibilityRole="button"><Ionicons name="information-circle-outline" size={19} color={colors.muted} /></Pressable>
+      <Pressable onPress={() => onCopy(entry)} hitSlop={10} accessibilityLabel={`${entry.food_name} copy`} accessibilityRole="button"><Ionicons name="copy-outline" size={19} color={colors.muted} /></Pressable>
+      <Pressable onPress={() => onRemove(entry.id)} hitSlop={10} style={{ marginLeft: 12 }} accessibilityLabel={`${entry.food_name} delete`} accessibilityRole="button"><Ionicons name="trash-outline" size={19} color={colors.muted} /></Pressable>
     </Animated.View>
   );
 });
 
 export default function Today() {
+  const { colors, styles } = useAppTheme();
   const db = useSQLiteContext();
   const router = useRouter();
   const { settings, locale, t } = useApp();
   const [date, setDate] = useState(dateKey());
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
+  const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [editPortion, setEditPortion] = useState('');
   const [streak, setStreak] = useState(0);
   const [best, setBest] = useState(0);
@@ -73,6 +80,7 @@ export default function Today() {
   const [weekAvg, setWeekAvg] = useState(0);
   const [weekDays, setWeekDays] = useState(0);
   const [ready, setReady] = useState(false);
+  const [showAllMeals, setShowAllMeals] = useState(false);
   // Signature of last applied data — focus reloads skip setState when nothing changed.
   const appliedSig = useRef<string | null>(null);
   const loadedDate = useRef<string | null>(null);
@@ -174,10 +182,10 @@ export default function Today() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totals, settings]);
 
-  const remove = useCallback((id: number) => Alert.alert(t('delete'), t('delete'), [{ text: t('cancel'), style: 'cancel' }, { text: t('delete'), style: 'destructive', onPress: async () => { await db.runAsync('DELETE FROM diary_entries WHERE id=?', id); load(); } }]), [db, load, t]);
-  const copyEntry = useCallback(async (entry: DiaryEntry) => { await db.runAsync('INSERT INTO diary_entries (date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat,source) VALUES (?,?,?,?,?,?,?,?,?,?)', date, entry.meal_type, entry.food_id, entry.food_name, entry.portion_grams, entry.calories, entry.protein, entry.carbs, entry.fat, 'Copied diary entry'); addXp('log-food'); load(); }, [db, date, load, addXp]);
+  const remove = useCallback((id: number) => Alert.alert(t('deleteEntryTitle'), t('deleteEntryConfirm'), [{ text: t('cancel'), style: 'cancel' }, { text: t('delete'), style: 'destructive', onPress: async () => { await db.runAsync('DELETE FROM diary_entries WHERE id=?', id); load(); } }]), [db, load, t]);
+  const copyEntry = useCallback(async (entry: DiaryEntry) => { await db.runAsync('INSERT INTO diary_entries (date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat,source) VALUES (?,?,?,?,?,?,?,?,?,?)', date, entry.meal_type, entry.food_id, entry.food_name, entry.portion_grams, entry.calories, entry.protein, entry.carbs, entry.fat, 'Copied diary entry'); addXp('log-food'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); load(); }, [db, date, load, addXp]);
   const startEdit = useCallback((entry: DiaryEntry) => { setEditing(entry); setEditPortion(String(entry.portion_grams)); }, []);
-  const saveEdit = async () => { if (!editing) return; const nextPortion = Math.max(1, parseNumber(editPortion, editing.portion_grams)); const factor = editing.portion_grams > 0 ? nextPortion / editing.portion_grams : 1; await db.runAsync('UPDATE diary_entries SET portion_grams=?,calories=?,protein=?,carbs=?,fat=? WHERE id=?', nextPortion, editing.calories * factor, editing.protein * factor, editing.carbs * factor, editing.fat * factor, editing.id); setEditing(null); addXp('log-food'); load(); };
+  const saveEdit = async () => { if (!editing) return; const nextPortion = Math.max(1, parseNumber(editPortion, editing.portion_grams)); const factor = editing.portion_grams > 0 ? nextPortion / editing.portion_grams : 1; await db.runAsync('UPDATE diary_entries SET portion_grams=?,calories=?,protein=?,carbs=?,fat=? WHERE id=?', nextPortion, editing.calories * factor, editing.protein * factor, editing.carbs * factor, editing.fat * factor, editing.id); setEditing(null); addXp('log-food'); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); load(); };
   const addWater = async (ml: number) => {
     const next = Math.max(0, water + ml);
     await db.runAsync('INSERT INTO water_entries (date, ml) VALUES (?,?) ON CONFLICT(date) DO UPDATE SET ml=excluded.ml', date, next);
@@ -298,7 +306,15 @@ export default function Today() {
           </View>
         </View>
 
-        {mealTypes.map((meal) => {
+        {(() => {
+          const primary: MealType[] = ['breakfast', 'lunch', 'dinner'];
+          const visible = showAllMeals
+            ? mealTypes
+            : mealTypes.filter((m) => primary.includes(m) || (grouped.get(m)?.length ?? 0) > 0);
+          const hiddenCount = mealTypes.length - visible.length;
+          return (
+            <>
+              {visible.map((meal) => {
           const mealEntries = grouped.get(meal) ?? [];
           const mealKcal = Math.round(mealEntries.reduce((a, e) => a + e.calories, 0));
           return (
@@ -321,12 +337,27 @@ export default function Today() {
                 <Text style={{ color: colors.muted, fontSize: 14, marginTop: 10 }}>{t('noEntries')}</Text>
               ) : (
                 mealEntries.map((entry, i) => (
-                  <EntryRow key={entry.id} entry={entry} onEdit={startEdit} onCopy={copyEntry} onRemove={remove} gramsLabel={gramsLabel} index={i} />
+                  <EntryRow key={entry.id} entry={entry} onEdit={startEdit} onCopy={copyEntry} onRemove={remove} onDetail={(e) => setDetail({ kind: 'food', foodId: e.food_id, portionGrams: e.portion_grams })} gramsLabel={gramsLabel} index={i} />
                 ))
               )}
             </View>
           );
         })}
+              {hiddenCount > 0 || !showAllMeals ? (
+                <Pressable
+                  onPress={() => setShowAllMeals((v) => !v)}
+                  accessibilityRole="button"
+                  style={[styles.outlineButton, { marginTop: 12, flexDirection: 'row', gap: 6 }]}
+                >
+                  <Ionicons name={showAllMeals ? 'chevron-up' : 'chevron-down'} size={17} color={colors.green} />
+                  <Text style={styles.outlineText}>
+                    {showAllMeals ? t('showLessMeals') : `${t('showAllMeals')} (${hiddenCount})`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          );
+        })()}
 
         {ready && entries.length === 0 && (
           <View style={styles.card}>
@@ -335,22 +366,29 @@ export default function Today() {
         )}
 
         <PressScale onPress={() => openAdd('snack')} style={[styles.button, { flexDirection: 'row', gap: 8, marginTop: 16, backgroundColor: colors.ink }]} haptic>
-          <Ionicons name="add" color={colors.white} size={20} />
+          <Ionicons name="add" color={colors.onInk} size={20} />
           <Text style={styles.buttonText}>{t('addFood')} ✨</Text>
         </PressScale>
-
-        {editing && (
-          <View style={[styles.card, { borderColor: colors.green, borderWidth: 2 }]}>
-            <Text style={styles.sectionTitle}>{editing.food_name}</Text>
+      </ScrollView>
+      <DetailSheet visible={detail != null} target={detail} onClose={() => setDetail(null)} />
+      <Modal visible={editing != null} transparent animationType="fade" onRequestClose={() => setEditing(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(12,26,19,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={styles.sectionTitle} numberOfLines={1}>{editing?.food_name ?? ''}</Text>
+            {editing ? (
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '700' }}>
+                ≈ {Math.round(editing.calories * (Math.max(1, parseNumber(editPortion, editing.portion_grams)) / Math.max(1, editing.portion_grams)))} kcal · {editing.meal_type ? t(editing.meal_type) : ''}
+              </Text>
+            ) : null}
             <Text style={styles.label}>{t('portion')} ({t('grams')})</Text>
             <TextInput style={styles.input} value={editPortion} onChangeText={setEditPortion} keyboardType="decimal-pad" />
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
               <Pressable onPress={() => setEditing(null)} style={[styles.outlineButton, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="close-outline" size={17} color={colors.green} /><Text style={styles.outlineText}>{t('cancel')}</Text></Pressable>
-              <Pressable onPress={saveEdit} style={[styles.button, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="checkmark" size={17} color={colors.white} /><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
+              <Pressable onPress={saveEdit} style={[styles.button, { flex: 1, flexDirection: 'row', gap: 6 }]}><Ionicons name="checkmark" size={17} color={colors.onGreen} /><Text style={styles.buttonText}>{t('save')}</Text></Pressable>
             </View>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
