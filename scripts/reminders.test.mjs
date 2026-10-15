@@ -6,6 +6,7 @@ import {
   REMINDER_IDENTIFIER,
   REMINDER_ON_KEY,
   buildReminderRequest,
+  canUseNotifications,
   dailyTrigger,
 } from '../src/lib/reminders.ts';
 
@@ -30,5 +31,20 @@ describe('buildReminderRequest', () => {
     assert.equal(a.identifier, REMINDER_IDENTIFIER);
     assert.equal(a.trigger.type, 'daily');
     assert.equal(REMINDER_ON_KEY, 'reminder_on');
+  });
+});
+
+describe('canUseNotifications', () => {
+  it('skips loading expo-notifications in Expo Go on Android', () => {
+    // Loading the package there throws from module init since SDK 53, and
+    // Metro reports that throw even when the require is wrapped in try/catch.
+    assert.equal(canUseNotifications('android', true), false);
+  });
+
+  it('allows every other environment, including local reminders in builds', () => {
+    assert.equal(canUseNotifications('android', false), true); // dev/production build
+    assert.equal(canUseNotifications('ios', true), true); // Expo Go iOS loads fine
+    assert.equal(canUseNotifications('ios', false), true);
+    assert.equal(canUseNotifications('web', true), true);
   });
 });

@@ -81,7 +81,11 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, kind TEXT NOT NULL, points REAL NOT NULL DEFAULT 0,
       dedupe_key TEXT
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS xp_events_dedupe_idx ON xp_events(dedupe_key);
+    -- NOTE: xp_events_dedupe_idx is intentionally NOT created here. On installs
+    -- from before dedupe_key existed, CREATE TABLE IF NOT EXISTS is a no-op and
+    -- an index on the missing column would abort this whole batch with
+    -- "no such column". It is created at the end of this function, right after
+    -- the ALTER TABLE that adds the column on those installs.
     CREATE TABLE IF NOT EXISTS badges (
       id TEXT PRIMARY KEY NOT NULL, unlocked_at TEXT NOT NULL
     );
@@ -279,6 +283,9 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
     console.error('Failed to migrate settings', e);
   }
   // Idempotent XP awards: one row per (event, day/week) via a unique key.
+  // ALTER first, index second — old installs reach this point without the
+  // column, so indexing it earlier (in the schema batch above) would abort
+  // schema init with "no such column: dedupe_key".
   try {
     const xpCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(xp_events)');
     if (xpCols.length > 0 && !xpCols.some((c) => c.name === 'dedupe_key')) {

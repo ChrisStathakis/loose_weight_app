@@ -16,12 +16,43 @@ type NotificationsApi = typeof import('expo-notifications');
 let apiCache: NotificationsApi | null = null;
 let apiTried = false;
 
+/**
+ * expo-notifications cannot be loaded in Expo Go on Android: since SDK 53 the
+ * package throws from its own module init (DevicePushTokenAutoRegistration.fx
+ * calls addPushTokenListener -> warnOfExpoGoPushUsage). Metro reports that
+ * throw via ErrorUtils even when the require is wrapped in try/catch
+ * (guardedLoadModule reports and then resolves to undefined), so the only way
+ * to keep the console clean is to not require the package in that environment
+ * at all. Local reminders keep working in development/production builds.
+ */
+export const canUseNotifications = (platformOS: string, isExpoGo: boolean): boolean =>
+  !(platformOS === 'android' && isExpoGo);
+
+function notificationsEnvironmentAllowed(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Platform } = require('react-native');
+    if (Platform.OS !== 'android') return true;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { isRunningInExpoGo } = require('expo');
+    const inExpoGo = typeof isRunningInExpoGo === 'function' && isRunningInExpoGo();
+    return canUseNotifications(Platform.OS, inExpoGo);
+  } catch {
+    // Unknown environment — let the guarded require below decide.
+    return true;
+  }
+}
+
 function getApi(): NotificationsApi | null {
   if (!apiTried) {
     apiTried = true;
+    if (!notificationsEnvironmentAllowed()) {
+      apiCache = null;
+      return null;
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      apiCache = require('expo-notifications');
+      apiCache = require('expo-notifications') ?? null;
     } catch {
       apiCache = null;
     }
