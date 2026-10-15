@@ -70,6 +70,29 @@ export async function isReminderOn(db: SQLiteDatabase): Promise<boolean> {
 
 export type ReminderResult = 'scheduled' | 'denied' | 'unavailable' | 'failed';
 
+/**
+ * Registers the foreground presentation handler. Call once at app startup:
+ * registering it only inside the "enable reminder" path means that after a
+ * process restart with the reminder already on, foreground presentation falls
+ * back to the library default.
+ */
+export function ensureNotificationHandler(): void {
+  const api = getApi();
+  if (!api) return;
+  try {
+    api.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {
+    // Expo Go / missing plugin — reminders degrade to unavailable.
+  }
+}
+
 export async function setEveningReminder(
   db: SQLiteDatabase,
   on: boolean,
@@ -88,14 +111,7 @@ export async function setEveningReminder(
       status = (await api.requestPermissionsAsync()).status;
     }
     if (status !== 'granted') return 'denied';
-    api.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
-    });
+    ensureNotificationHandler();
     // Android 8+ requires a channel; absence of the API means non-Android.
     try {
       await (api as unknown as {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
@@ -7,6 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
+import { addDaysKey } from '@/src/lib/dates';
 import { gradients, radius, useAppTheme } from '@/src/theme';
 import { parseNumber } from '@/src/lib/nutrition';
 import { WORKOUT_EMOJI, WORKOUT_TYPES, estimateForWorkout } from '@/src/lib/activity';
@@ -33,7 +34,9 @@ export default function Activity() {
   // Form state
   const [wtype, setWtype] = useState<WorkoutType>('walk');
   const [minutes, setMinutes] = useState('30');
-  const [weight, setWeight] = useState('70');
+  // Empty until the latest logged weight is prefilled on focus; the input's
+  // "70" placeholder and the parseNumber fallback preserve the old default.
+  const [weight, setWeight] = useState('');
   const [caloriesOverride, setCaloriesOverride] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -45,40 +48,51 @@ export default function Activity() {
   const typeName = useCallback((ty: WorkoutType) => t(`workout_${ty}` as TranslationKey), [t]);
 
   const load = useCallback(async () => {
-    const rows = await db.getAllAsync<Workout>(
-      'SELECT id,date,type,minutes,calories,weight_kg,source,external_id,note,steps,distance_m FROM workouts WHERE date=? ORDER BY id DESC',
-      date,
-    );
-    setWorkouts(rows);
     try {
-      setLastSync(await getLastSync(db));
-    } catch {
-      // sync_state may not exist yet — ignore
+      const rows = await db.getAllAsync<Workout>(
+        'SELECT id,date,type,minutes,calories,weight_kg,source,external_id,note,steps,distance_m FROM workouts WHERE date=? ORDER BY id DESC',
+        date,
+      );
+      setWorkouts(rows);
+      try {
+        setLastSync(await getLastSync(db));
+      } catch {
+        // sync_state may not exist yet — ignore
+      }
+      // Local week start: toISOString on a T12 date shifts a day in UTC+12/+13.
+      const startKey = addDaysKey(date, -6);
+      const week = await db.getAllAsync<{ date: string; total: number }>(
+        'SELECT date, SUM(calories) as total FROM workouts WHERE date BETWEEN ? AND ? GROUP BY date',
+        startKey,
+        date,
+      );
+      setWeekBurned(week.reduce((a, r) => a + Number(r.total ?? 0), 0));
+      setActiveDays(week.filter((r) => Number(r.total ?? 0) > 0).length);
+    } catch (e) {
+      // A failed load must not leave an unhandled rejection or wipe the list.
+      console.error('Failed to load workouts', e);
     }
-    const start = new Date(`${date}T12:00:00`);
-    start.setDate(start.getDate() - 6);
-    const startKey = start.toISOString().slice(0, 10);
-    const week = await db.getAllAsync<{ date: string; total: number }>(
-      'SELECT date, SUM(calories) as total FROM workouts WHERE date BETWEEN ? AND ? GROUP BY date',
-      startKey,
-      date,
-    );
-    setWeekBurned(week.reduce((a, r) => a + Number(r.total ?? 0), 0));
-    setActiveDays(week.filter((r) => Number(r.total ?? 0) > 0).length);
   }, [db, date]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // Prefill weight from the latest logged weight once.
-  useEffect(() => {
-    (async () => {
-      try {
-        const row = await db.getFirstAsync<{ kilograms: number }>('SELECT kilograms FROM weights ORDER BY date DESC LIMIT 1');
-        if (row) setWeight(String(row.kilograms));
-      } catch {
-        // weights table may be empty — keep default
-      }
-    })();
-  }, [db]);
+  // Prefill from the latest logged weight, refreshed on focus so a weight
+  // added elsewhere shows up — but never overwrite what the user typed.
+  const prefilledWeight = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const row = await db.getFirstAsync<{ kilograms: number }>('SELECT kilograms FROM weights ORDER BY date DESC LIMIT 1');
+          if (!row) return;
+          const next = String(row.kilograms);
+          setWeight((cur) => (cur === '' || cur === prefilledWeight.current ? next : cur));
+          prefilledWeight.current = next;
+        } catch {
+          // weights table may be empty — keep default
+        }
+      })();
+    }, [db]),
+  );
 
   const minutesNum = Math.max(1, Math.round(parseNumber(minutes, 30)));
   const weightNum = Math.max(30, parseNumber(weight, 70));

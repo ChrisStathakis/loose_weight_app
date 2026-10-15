@@ -1,6 +1,31 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateGoals } from '../src/lib/nutrition.ts';
+import { estimateGoals, parseNumber } from '../src/lib/nutrition.ts';
+
+describe('parseNumber', () => {
+  it('returns the fallback for empty or blank input (not 0)', () => {
+    assert.equal(parseNumber('', 2000), 2000);
+    assert.equal(parseNumber('   ', 2000), 2000);
+    assert.equal(parseNumber(',', 15), 15);
+  });
+
+  it('parses plain, decimal-comma and noisy values', () => {
+    assert.equal(parseNumber('1800'), 1800);
+    assert.equal(parseNumber('82,4'), 82.4);
+    assert.equal(parseNumber('70 g'), 70);
+    assert.equal(parseNumber('-5'), -5);
+  });
+
+  it('falls back on garbage instead of NaN', () => {
+    assert.equal(parseNumber('abc', 30), 30);
+    assert.equal(parseNumber('12.3.4', 30), 30);
+  });
+
+  it('defaults the fallback to 0', () => {
+    assert.equal(parseNumber(''), 0);
+    assert.equal(parseNumber('120 kcal'), 120);
+  });
+});
 
 describe('estimateGoals', () => {
   it('returns null when inputs are missing', () => {

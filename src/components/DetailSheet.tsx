@@ -66,7 +66,8 @@ export function DetailSheet({
           }
           let ingredients: Recipe['ingredients'] = [];
           try {
-            ingredients = JSON.parse(row.ingredients) as Recipe['ingredients'];
+            const parsed = JSON.parse(row.ingredients);
+            if (Array.isArray(parsed)) ingredients = parsed as Recipe['ingredients'];
           } catch {
             ingredients = [];
           }

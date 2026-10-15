@@ -7,7 +7,13 @@ export const scaleFood = (food: Food, grams: number) => {
 
 export const sumNutrition = <T extends { calories: number; protein?: number | null; carbs?: number | null; fat?: number | null }>(items: T[]) => items.reduce((a, item) => ({ calories: a.calories + item.calories, protein: a.protein + (item.protein ?? 0), carbs: a.carbs + (item.carbs ?? 0), fat: a.fat + (item.fat ?? 0) }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 export const parseNumber = (value: string, fallback = 0) => {
-  const parsed = Number(value.replace(',', '.').replace(/[^0-9.\-]/g, ''));
+  const trimmed = value.trim();
+  // Empty input must return the fallback: Number('') is 0 (finite), so
+  // falling through would silently turn a cleared field into 0.
+  if (!trimmed) return fallback;
+  const stripped = trimmed.replace(',', '.').replace(/[^0-9.\-]/g, '');
+  if (!stripped) return fallback;
+  const parsed = Number(stripped);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 

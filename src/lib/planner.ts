@@ -3,7 +3,8 @@ import { scaleFood } from './nutrition';
 
 export const mealOrder = ['breakfast', 'brunch', 'snack', 'lunch', 'snack2', 'dinner', 'snack3'] as const;
 export const containsExcluded = (recipe: Recipe, excluded: string[]) => {
-  const haystack = `${recipe.name_en} ${recipe.name_el} ${recipe.ingredients.map((i) => `${i.name_en} ${i.name_el}`).join(' ')}`.toLowerCase();
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const haystack = `${recipe.name_en} ${recipe.name_el} ${ingredients.map((i) => `${i.name_en} ${i.name_el}`).join(' ')}`.toLowerCase();
   return excluded.some((item) => item.trim() && haystack.includes(item.trim().toLowerCase()));
 };
 

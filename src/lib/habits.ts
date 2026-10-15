@@ -5,7 +5,9 @@ export function calcStreak(loggedDates: string[], todayKey: string): { current: 
   // Allow today to be missing (streak still alive if yesterday logged).
   if (!set.has(todayKey)) cursor.setDate(cursor.getDate() - 1);
   while (true) {
-    const key = cursor.toISOString().slice(0, 10);
+    // Local key, never toISOString: UTC+12/+13 would shift the noon cursor
+    // back a day and under-count the streak.
+    const key = localDateKey(cursor);
     if (set.has(key)) {
       current += 1;
       cursor.setDate(cursor.getDate() - 1);
@@ -20,7 +22,7 @@ export function calcStreak(loggedDates: string[], todayKey: string): { current: 
     if (prev) {
       const prevDate: Date = new Date(`${prev}T12:00:00`);
       prevDate.setDate(prevDate.getDate() + 1);
-      if (prevDate.toISOString().slice(0, 10) === key) run += 1;
+      if (localDateKey(prevDate) === key) run += 1;
       else run = 1;
     } else run = 1;
     best = Math.max(best, run);
@@ -28,6 +30,8 @@ export function calcStreak(loggedDates: string[], todayKey: string): { current: 
   }
   return { current, best };
 }
+
+import { localDateKey } from './dates';
 
 import type { Locale } from '../types';
 import { tFor } from './i18n';

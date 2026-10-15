@@ -94,11 +94,11 @@ async function ensurePermissions(): Promise<void> {
   await lib.initialize();
   const granted = await lib.requestPermission([
     { accessType: 'read', recordType: 'ExerciseSession' },
-    { accessType: 'read', recordType: 'TotalCaloriesBurned' },
+    { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
     { accessType: 'read', recordType: 'Steps' },
     { accessType: 'read', recordType: 'Distance' },
   ]);
-  const need = new Set(['ExerciseSession', 'TotalCaloriesBurned', 'Steps', 'Distance']);
+  const need = new Set(['ExerciseSession', 'ActiveCaloriesBurned', 'Steps', 'Distance']);
   for (const p of granted) {
     if ('recordType' in p && need.has((p as { recordType: string }).recordType)) {
       need.delete((p as { recordType: string }).recordType);
@@ -117,8 +117,10 @@ async function aggregateWindow(startTime: string, endTime: string) {
   let steps: number | null = null;
   let distanceM: number | null = null;
   try {
-    const r = await lib.aggregateRecord({ recordType: 'TotalCaloriesBurned', timeRangeFilter: filter });
-    const kcal = (r as { ENERGY_TOTAL?: { inKilocalories?: number } }).ENERGY_TOTAL?.inKilocalories;
+    // ActiveCaloriesBurned, NOT TotalCaloriesBurned: the total includes basal
+    // metabolism, which would over-credit exercise on any synced day.
+    const r = await lib.aggregateRecord({ recordType: 'ActiveCaloriesBurned', timeRangeFilter: filter });
+    const kcal = (r as { ACTIVE_CALORIES_TOTAL?: { inKilocalories?: number } }).ACTIVE_CALORIES_TOTAL?.inKilocalories;
     if (typeof kcal === 'number' && Number.isFinite(kcal) && kcal > 0) calories = Math.round(kcal);
   } catch {
     // optional — falls back to MET estimate

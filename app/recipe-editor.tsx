@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -50,6 +50,11 @@ export default function RecipeEditor() {
         servingCount,
       );
       router.back();
+    } catch (e) {
+      // Without this the modal just flashes the spinner and stays open with
+      // no explanation (insert failure = unhandled rejection).
+      console.error('Failed to save recipe', e);
+      Alert.alert(t('createRecipe'), t('saveFailed'));
     } finally {
       setSaving(false);
     }

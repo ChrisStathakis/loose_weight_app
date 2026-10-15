@@ -8,13 +8,14 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
+import { addDaysKey, weekKeys } from '@/src/lib/dates';
 import { sumNutrition, parseNumber } from '@/src/lib/nutrition';
 import { calcStreak, foodEmoji, greeting } from '@/src/lib/habits';
 import { computeBossHp } from '@/src/lib/opponents';
 import { opponentForWeek } from '@/src/data/opponents';
 import { DiaryEntry, MealType } from '@/src/types';
 import { gradients, radius, useAppTheme } from '@/src/theme';
-import { DateStepper } from '@/src/components/DateStepper';
+import { WeekTabs, type WeekTabMark } from '@/src/components/WeekTabs';
 import { AnimatedRing } from '@/src/ui/AnimatedRing';
 import { GradientHero } from '@/src/ui/GradientHero';
 import { ShimmerSkeleton } from '@/src/ui/ShimmerSkeleton';
@@ -79,6 +80,7 @@ export default function Today() {
   const [burned, setBurned] = useState(0);
   const [weekAvg, setWeekAvg] = useState(0);
   const [weekDays, setWeekDays] = useState(0);
+  const [weekMarks, setWeekMarks] = useState<Record<string, WeekTabMark>>({});
   const [ready, setReady] = useState(false);
   const [showAllMeals, setShowAllMeals] = useState(false);
   // Signature of last applied data — focus reloads skip setState when nothing changed.
@@ -87,15 +89,17 @@ export default function Today() {
 
   const load = useCallback(async () => {
     try {
-      const start = new Date(`${date}T12:00:00`);
-      start.setDate(start.getDate() - 6);
-      const startKey = start.toISOString().slice(0, 10);
-      const [rows, dateRows, w, week, burnRow] = await Promise.all([
+      const startKey = addDaysKey(date, -6);
+      const calWeek = weekKeys(date);
+      const [rows, dateRows, w, week, burnRow, weekCalRows] = await Promise.all([
         db.getAllAsync<DiaryEntry>('SELECT id,date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat FROM diary_entries WHERE date=? ORDER BY id DESC', date),
         db.getAllAsync<{ date: string }>('SELECT DISTINCT date FROM diary_entries WHERE calories > 0 ORDER BY date DESC LIMIT 120'),
         db.getFirstAsync<{ ml: number }>('SELECT ml FROM water_entries WHERE date=?', date),
         db.getAllAsync<{ date: string; calories: number }>('SELECT date, SUM(calories) as calories FROM diary_entries WHERE date BETWEEN ? AND ? GROUP BY date', startKey, date),
         db.getFirstAsync<{ total: number }>('SELECT COALESCE(SUM(calories),0) as total FROM workouts WHERE date=?', date).catch(() => ({ total: 0 })),
+        // Calendar week (Mon–Sun) for the week strip marks, unlike the rolling
+        // 7-day window above which feeds the streak/average stats.
+        db.getAllAsync<{ date: string; calories: number }>('SELECT date, SUM(calories) as calories FROM diary_entries WHERE date BETWEEN ? AND ? GROUP BY date', calWeek[0], calWeek[6]),
       ]);
       const s = calcStreak(dateRows.map((r) => r.date), dateKey());
       const ml = Number(w?.ml ?? 0);
@@ -103,8 +107,14 @@ export default function Today() {
       const active = week.filter((d) => Number(d.calories) > 0);
       const days = active.length;
       const avg = days ? active.reduce((a, d) => a + Number(d.calories), 0) / days : 0;
+      // Week strip: any logged calories = dot, ≥90% of the goal = green dot.
+      const marks: Record<string, WeekTabMark> = {};
+      for (const r of weekCalRows) {
+        const kcal = Number(r.calories);
+        if (kcal > 0) marks[r.date] = kcal >= settings.calorie_goal * 0.9 ? 'goal-hit' : 'has-data';
+      }
       // One signature comparison → a single batched update, or no update at all.
-      const sig = JSON.stringify([date, rows.map((r) => [r.id, r.portion_grams, Math.round(r.calories * 100)]), ml, Math.round(burn), s.current, s.best, days, Math.round(avg)]);
+      const sig = JSON.stringify([date, rows.map((r) => [r.id, r.portion_grams, Math.round(r.calories * 100)]), ml, Math.round(burn), s.current, s.best, days, Math.round(avg), calWeek.map((k) => [k, marks[k] ?? ''])]);
       if (sig === appliedSig.current && loadedDate.current === date) return;
       appliedSig.current = sig;
       loadedDate.current = date;
@@ -115,12 +125,13 @@ export default function Today() {
       setBurned(burn);
       setWeekDays(days);
       setWeekAvg(avg);
+      setWeekMarks(marks);
       setReady(true);
     } catch (e) {
       console.error('Failed to load diary entries', e);
       setReady(true);
     }
-  }, [db, date]);
+  }, [db, date, settings.calorie_goal]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const totals = useMemo(() => sumNutrition(entries), [entries]);
@@ -134,9 +145,7 @@ export default function Today() {
   const netCalories = Math.max(0, totals.calories - burned);
   const remaining = Math.max(0, Math.round(settings.calorie_goal - netCalories));
   const mood = netCalories >= settings.calorie_goal ? t('goalHit') : netCalories >= settings.calorie_goal * 0.5 ? t('almostThere') : t('freshStart');
-  const { addXp, unlockBadge, unlockWithFanfare, celebrate } = useGamification();
-  const goalHitRef = useRef(false);
-  const waterHitRef = useRef(false);
+  const { addXp, awardOnce, unlockBadge, unlockWithFanfare, celebrate } = useGamification();
 
   const opponent = useMemo(() => opponentForWeek(date), [date]);
   const boss = useMemo(
@@ -152,15 +161,16 @@ export default function Today() {
   );
 
   useEffect(() => {
+    // awardOnce is keyed by the diary date, so re-opening the app on a day
+    // that already hit the goal never double-pays (+50) or replays the
+    // celebration.
     const hit = netCalories >= settings.calorie_goal && totals.calories > 0;
-    if (hit && !goalHitRef.current) {
-      goalHitRef.current = true;
-      addXp('goal-hit');
-      unlockBadge('goal-crusher');
+    if (hit) {
+      void awardOnce('goal-hit', `goal-hit:${date}`);
+      void unlockBadge('goal-crusher');
     }
-    if (!hit && netCalories < settings.calorie_goal * 0.9) goalHitRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [netCalories]);
+  }, [netCalories, date]);
 
   // Streak badges (also fixes dead 'streak-3' which was never unlocked).
   useEffect(() => {
@@ -191,12 +201,12 @@ export default function Today() {
     await db.runAsync('INSERT INTO water_entries (date, ml) VALUES (?,?) ON CONFLICT(date) DO UPDATE SET ml=excluded.ml', date, next);
     setWater(next);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (next >= WATER_GOAL && !waterHitRef.current) {
-      waterHitRef.current = true;
-      addXp('water-goal');
-      unlockBadge('hydrated');
+    if (next >= WATER_GOAL) {
+      // Same idempotence: crossing the goal up and down within one day, or
+      // reopening the app, awards at most once per date.
+      void awardOnce('water-goal', `water-goal:${date}`);
+      void unlockBadge('hydrated');
     }
-    if (next < WATER_GOAL) waterHitRef.current = false;
     // Aqua Trio: water goal on 3 distinct days in the last 7.
     try {
       const row = await db.getFirstAsync<{ n: number }>(
@@ -233,7 +243,7 @@ export default function Today() {
           </View>
         </View>
 
-        <DateStepper date={date} locale={locale} onChange={setDate} />
+        <WeekTabs date={date} locale={locale} marks={weekMarks} onSelect={setDate} />
 
         <GradientHero colors={gradients.heroDark}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -267,8 +277,10 @@ export default function Today() {
           defeated={boss.defeated}
           onPress={() => {
             if (boss.defeated) {
-              addXp('boss-slay');
-              unlockBadge('boss-slayer');
+              // One victory per opponent per calendar month (opponentForWeek
+              // rotates by month hash); the unique key blocks tap farming.
+              void awardOnce('boss-slay', `boss-slay:${date.slice(0, 7)}:${opponent.id}`);
+              void unlockBadge('boss-slayer');
             } else {
               celebrate(locale === 'el' ? opponent.weakness_el : opponent.weakness_en, '⚔️');
             }
@@ -308,10 +320,11 @@ export default function Today() {
 
         {(() => {
           const primary: MealType[] = ['breakfast', 'lunch', 'dinner'];
-          const visible = showAllMeals
-            ? mealTypes
-            : mealTypes.filter((m) => primary.includes(m) || (grouped.get(m)?.length ?? 0) > 0);
-          const hiddenCount = mealTypes.length - visible.length;
+          // "Collapsed" set is stable regardless of the toggle, so HiddenCount
+          // stays meaningful and "Show less" can render after expanding.
+          const collapsed = mealTypes.filter((m) => primary.includes(m) || (grouped.get(m)?.length ?? 0) > 0);
+          const visible = showAllMeals ? mealTypes : collapsed;
+          const hiddenCount = mealTypes.length - collapsed.length;
           return (
             <>
               {visible.map((meal) => {
@@ -343,7 +356,7 @@ export default function Today() {
             </View>
           );
         })}
-              {hiddenCount > 0 || !showAllMeals ? (
+              {hiddenCount > 0 ? (
                 <Pressable
                   onPress={() => setShowAllMeals((v) => !v)}
                   accessibilityRole="button"

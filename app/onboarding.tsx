@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useState, useRef } from 'react';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
 import { Locale } from '@/src/types';
@@ -30,8 +31,11 @@ export default function Onboarding() {
   const [weight, setWeight] = useState(settings.weight_kg != null ? String(settings.weight_kg) : '');
   const [targetWeight, setTargetWeight] = useState(settings.target_weight_kg != null ? String(settings.target_weight_kg) : '');
   const [birthDate, setBirthDate] = useState(settings.birth_date ?? '');
+  const finishingRef = useRef(false);
   const tx = (key: Parameters<typeof t>[0]) => tFor(locale, key);
   const { colors, styles } = useAppTheme();
+  // Fixed 54px ignored notches/status bars; derive from the actual insets.
+  const insets = useSafeAreaInsets();
   const age = calcAge(birthDate);
   const suggested = estimateGoals({
     weight_kg: parseOptionalNumber(weight),
@@ -40,20 +44,31 @@ export default function Onboarding() {
   });
 
   const finish = async () => {
-    const height_cm = parseOptionalNumber(height);
-    const weight_kg = parseOptionalNumber(weight);
-    const target_weight_kg = parseOptionalNumber(targetWeight);
-    const cleanBirth = birthDate.trim();
-    const birth_date = isValidBirthDate(cleanBirth) ? cleanBirth : '';
-    await updateSettings({ locale, calorie_goal: parseNumber(calories, 2000), protein_goal: parseNumber(protein, 120), carbs_goal: parseNumber(carbs, 220), fat_goal: parseNumber(fat, 70), diet, excluded: excluded.split(',').map((v) => v.trim()).filter(Boolean), onboarding_complete: true, height_cm, birth_date, weight_kg, target_weight_kg });
-    if (weight_kg != null) {
-      try {
-        await db.runAsync('INSERT OR REPLACE INTO weights (date, kilograms) VALUES (?, ?)', dateKey(), weight_kg);
-      } catch (e) {
-        console.error('Failed to seed initial weight', e);
+    // Synchronous re-entry gate: two taps in the same frame both pass a
+    // state-based check before React re-renders.
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    try {
+      const height_cm = parseOptionalNumber(height);
+      const weight_kg = parseOptionalNumber(weight);
+      const target_weight_kg = parseOptionalNumber(targetWeight);
+      const cleanBirth = birthDate.trim();
+      const birth_date = isValidBirthDate(cleanBirth) ? cleanBirth : '';
+      await updateSettings({ locale, calorie_goal: parseNumber(calories, 2000), protein_goal: parseNumber(protein, 120), carbs_goal: parseNumber(carbs, 220), fat_goal: parseNumber(fat, 70), diet, excluded: excluded.split(',').map((v) => v.trim()).filter(Boolean), onboarding_complete: true, height_cm, birth_date, weight_kg, target_weight_kg });
+      if (weight_kg != null) {
+        try {
+          await db.runAsync('INSERT OR REPLACE INTO weights (date, kilograms) VALUES (?, ?)', dateKey(), weight_kg);
+        } catch (e) {
+          console.error('Failed to seed initial weight', e);
+        }
       }
+      router.replace('/(tabs)');
+    } catch (e) {
+      console.error('Failed to finish onboarding', e);
+      Alert.alert(t('welcome'), t('saveFailed'));
+    } finally {
+      finishingRef.current = false;
     }
-    router.replace('/(tabs)');
   };
 
   const applySuggested = () => {
@@ -69,7 +84,7 @@ export default function Onboarding() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: 54 }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       keyboardDismissMode="on-drag"

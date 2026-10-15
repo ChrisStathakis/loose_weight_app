@@ -55,6 +55,13 @@ const pickName = (product: any): { en: string | null; el: string | null } => {
   return { en: nameEn, el: nameEl };
 };
 
+/** Deterministic id component for products without a barcode. */
+const identityHash = (input: string): string => {
+  let h = 5381;
+  for (let i = 0; i < input.length; i += 1) h = ((h << 5) + h + input.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
+
 export const mapProduct = (product: any, index = 0, locale: Locale = 'en'): Food | null => {
   if (!product || typeof product !== 'object') return null;
   const nutrients = product.nutriments ?? {};
@@ -62,11 +69,18 @@ export const mapProduct = (product: any, index = 0, locale: Locale = 'en'): Food
   if (!nameEn && !nameEl) return null;
   const fallback = packagedFoodFallback(locale);
   const code = product.code != null ? String(product.code) : null;
+  const brand = normalizeBrand(product.brands ?? product.brand);
+  const displayEn = nameEn || nameEl || fallback;
+  // Barcode-less products key on a content hash, NOT the search index: index
+  // ids collided across searches ("off-0" was the first result of every
+  // query), so picking one silently overwrote the other's cached row,
+  // favorites and price history.
+  const id = code ? `off-${code}` : `off-x${identityHash(`${displayEn}|${nameEl ?? ''}|${brand ?? ''}`)}`;
   return {
-    id: `off-${code ?? index}`,
-    name_en: nameEn || nameEl || fallback,
+    id,
+    name_en: displayEn,
     name_el: nameEl || nameEn || fallback,
-    brand: normalizeBrand(product.brands ?? product.brand),
+    brand,
     barcode: code,
     calories_per_100g: kcal,
     protein_per_100g: toNumber(nutrients.proteins_100g),

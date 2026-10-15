@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationBar } from 'expo-navigation-bar';
 import { migrateSchemaIfNeeded, seedIfNeeded } from '@/src/lib/db';
+import { ensureNotificationHandler } from '@/src/lib/reminders';
 import { AppProvider, useApp } from '@/src/context/AppContext';
 import { GamificationProvider } from '@/src/context/GamificationContext';
 import { CelebrationOverlay } from '@/src/ui/CelebrationOverlay';
@@ -210,6 +211,11 @@ function Gate() {
 
 export default function RootLayout() {
   useImmersiveNavbar();
+  // Foreground notification behavior must be registered every process start,
+  // not only when the reminder toggle is flipped on.
+  useEffect(() => {
+    ensureNotificationHandler();
+  }, []);
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
   const [fontTimedOut, setFontTimedOut] = useState(false);
   const [dbKey, setDbKey] = useState(0);

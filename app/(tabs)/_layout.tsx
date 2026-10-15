@@ -32,7 +32,9 @@ export default function TabsLayout() {
       tabBarLabelStyle: { fontSize: 11, fontWeight: '700' as const },
       tabBarIconStyle: { marginTop: 2 },
     }),
-    [bottomInset],
+    // colors/scheme must be deps: after an in-app theme switch the memoized
+    // options otherwise keep the old palette until the layout remounts.
+    [bottomInset, colors, scheme],
   );
   const icon = (on: string, off: string) => ({ color, size, focused }: { color: ColorValue; size: number; focused: boolean }) => (
     <View

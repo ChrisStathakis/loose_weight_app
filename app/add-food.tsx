@@ -12,6 +12,7 @@ import { Food, MealType } from '@/src/types';
 import { parseNumber, scaleFood } from '@/src/lib/nutrition';
 import { microLabel, scaleMicros, type MicroValue } from '@/src/lib/micronutrients';
 import { foodEmoji } from '@/src/lib/habits';
+import { dateKey } from '@/src/lib/db';
 import { filterFoods, normalizeEl } from '@/src/lib/search';
 import { lookupBarcode, searchFoodsOnline, OffError } from '@/src/lib/foodProviders';
 import { KcalBadge } from '@/src/components/MacroPill';
@@ -118,7 +119,7 @@ export default function AddFood() {
   const { colors, styles } = useAppTheme();
   const { addXp } = useGamification();
   const params = useLocalSearchParams<{ date?: string; meal?: MealType }>();
-  const date = String(params.date ?? new Date().toISOString().slice(0, 10));
+  const date = String(params.date ?? dateKey());
   const meal = (params.meal ?? 'snack') as MealType;
   const [query, setQuery] = useState('');
   const [foods, setFoods] = useState<Food[]>([]);
@@ -134,6 +135,10 @@ export default function AddFood() {
   const [customOpen, setCustomOpen] = useState(false);
   const [custom, setCustom] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '' });
   const [logging, setLogging] = useState(false);
+  const [customSaving, setCustomSaving] = useState(false);
+  // Synchronous gate: setScanning(false) does not unmount CameraView
+  // immediately, so one barcode can fire onBarcode several times.
+  const scanLockRef = useRef(false);
   // Store prices per visible food (cheapest shown as a chip on each row).
   const [priceMap, setPriceMap] = useState<Record<string, FoodPriceOption[]>>({});
   const [priceFood, setPriceFood] = useState<Food | null>(null);
@@ -235,6 +240,9 @@ export default function AddFood() {
   const toggleFav = useCallback(async (food: Food) => {
     const next = food.is_favorite ? 0 : 1;
     try {
+      // Online results are not in `foods` until picked or starred: cache the
+      // row first, otherwise the UPDATE hits nothing and the star is lost.
+      await cacheOnlineFood(food);
       await db.runAsync('UPDATE foods SET is_favorite=? WHERE id=?', next, food.id);
       setFoods((list) => list.map((f) => (f.id === food.id ? { ...f, is_favorite: next } : f)));
       loadHelpers();
@@ -297,9 +305,24 @@ export default function AddFood() {
       if (request === onlineRequest.current) setOnlineLoading(false);
     }
   };
-  const scan = async () => { if (!permission?.granted) { const result = await requestPermission(); if (!result.granted) { Alert.alert(t('scanBarcode'), t('cameraPermission')); return; } } setScanning(true); };
-  const onBarcode = async ({ data }: { data: string }) => { setScanning(false); try { const found = await lookupBarcode(data, locale); if (!found) Alert.alert(t('scanBarcode'), t('barcodeNotFound')); else { const withCode = found.barcode ? found : { ...found, barcode: data }; await cacheOnlineFood(withCode); choose(withCode); } } catch (e) { const code = e instanceof OffError ? e.code : null; Alert.alert(t('scanBarcode'), code === 'OFF_TIMEOUT' ? t('onlineTimeout') : code === 'OFF_RATE_LIMITED' ? t('onlineRateLimited') : code === 'OFF_NETWORK' ? t('onlineNetworkError') : t('barcodeNotFound')); } };
-  const saveCustom = async () => { if (!custom.name.trim()) return; const id = `custom-${Date.now()}`; const food: Food = { id, name_en: custom.name, name_el: custom.name, calories_per_100g: parseNumber(custom.calories), protein_per_100g: parseNumber(custom.protein), carbs_per_100g: parseNumber(custom.carbs), fat_per_100g: parseNumber(custom.fat), serving_grams: 100, source: 'Custom' }; await db.runAsync('INSERT INTO foods (id,name_en,name_el,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,serving_grams,source) VALUES (?,?,?,?,?,?,?,?,?)', food.id, food.name_en, food.name_el, food.calories_per_100g, food.protein_per_100g, food.carbs_per_100g, food.fat_per_100g, 100, food.source); choose(food); setCustomOpen(false); };
+  const scan = async () => { if (!permission?.granted) { const result = await requestPermission(); if (!result.granted) { Alert.alert(t('scanBarcode'), t('cameraPermission')); return; } } scanLockRef.current = false; setScanning(true); };
+  const onBarcode = async ({ data }: { data: string }) => { if (scanLockRef.current) return; scanLockRef.current = true; setScanning(false); try { const found = await lookupBarcode(data, locale); if (!found) Alert.alert(t('scanBarcode'), t('barcodeNotFound')); else { const withCode = found.barcode ? found : { ...found, barcode: data }; await cacheOnlineFood(withCode); choose(withCode); } } catch (e) { const code = e instanceof OffError ? e.code : null; Alert.alert(t('scanBarcode'), code === 'OFF_TIMEOUT' ? t('onlineTimeout') : code === 'OFF_RATE_LIMITED' ? t('onlineRateLimited') : code === 'OFF_NETWORK' ? t('onlineNetworkError') : t('barcodeNotFound')); } };
+  const saveCustom = async () => {
+    if (!custom.name.trim() || customSaving) return;
+    setCustomSaving(true);
+    try {
+      const id = `custom-${Date.now()}`;
+      const food: Food = { id, name_en: custom.name, name_el: custom.name, calories_per_100g: parseNumber(custom.calories), protein_per_100g: parseNumber(custom.protein), carbs_per_100g: parseNumber(custom.carbs), fat_per_100g: parseNumber(custom.fat), serving_grams: 100, source: 'Custom' };
+      await db.runAsync('INSERT INTO foods (id,name_en,name_el,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,serving_grams,source) VALUES (?,?,?,?,?,?,?,?,?)', food.id, food.name_en, food.name_el, food.calories_per_100g, food.protein_per_100g, food.carbs_per_100g, food.fat_per_100g, 100, food.source);
+      choose(food);
+      setCustomOpen(false);
+    } catch (e) {
+      console.error('Failed to save custom food', e);
+      Alert.alert(t('manualFood'), t('saveFailed'));
+    } finally {
+      setCustomSaving(false);
+    }
+  };
 
   const visibleFoods = useMemo(
     () => (tab === 'recents' ? recents : tab === 'favorites' ? favorites : foods),

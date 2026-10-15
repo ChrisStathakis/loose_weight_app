@@ -78,8 +78,10 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
       date TEXT PRIMARY KEY NOT NULL, ml REAL NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS xp_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, kind TEXT NOT NULL, points REAL NOT NULL DEFAULT 0
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, kind TEXT NOT NULL, points REAL NOT NULL DEFAULT 0,
+      dedupe_key TEXT
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS xp_events_dedupe_idx ON xp_events(dedupe_key);
     CREATE TABLE IF NOT EXISTS badges (
       id TEXT PRIMARY KEY NOT NULL, unlocked_at TEXT NOT NULL
     );
@@ -169,22 +171,54 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
   // table, preserving every row (ids, locks, nutrition). Runs once on old
   // installs; fresh installs already get the new shape above.
   try {
+    // Crash recovery from the pre-transaction build of this migration:
+    //  - killed after CREATE+INSERT but before DROP → plans_new holds a copy
+    //  - killed after DROP but before RENAME → plans is empty, plans_new holds
+    //    the only copy. Salvage it when plans came back empty.
+    const orphan = await db.getFirstAsync<{ n: number }>(
+      "SELECT COUNT(*) as n FROM sqlite_master WHERE type='table' AND name='plans_new'",
+    );
+    if (Number(orphan?.n ?? 0) > 0) {
+      const mainCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) as n FROM plans');
+      const orphanCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) as n FROM plans_new');
+      if (Number(mainCount?.n ?? 0) === 0 && Number(orphanCount?.n ?? 0) > 0) {
+        await db.withTransactionAsync(async () => {
+          await db.execAsync(`
+            INSERT INTO plans (id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat)
+              SELECT id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat FROM plans_new;
+            DROP TABLE plans_new;
+          `);
+        });
+        console.log('Recovered saved plans from plans_new');
+      } else {
+        await db.execAsync('DROP TABLE IF EXISTS plans_new');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to recover interrupted plans migration', e);
+  }
+  try {
     const planTable = await db.getFirstAsync<{ sql?: string }>(
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='plans'",
     );
     if (planTable?.sql && /UNIQUE\s*\(\s*date\s*,\s*meal_type\s*\)/i.test(planTable.sql)) {
-      await db.execAsync(`
-        CREATE TABLE plans_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal_type TEXT NOT NULL,
-          recipe_id TEXT, portion REAL NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0,
-          food_id TEXT, food_name TEXT, portion_grams REAL, calories REAL, protein REAL, carbs REAL, fat REAL
-        );
-        INSERT INTO plans_new (id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat)
-          SELECT id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat FROM plans;
-        DROP TABLE plans;
-        ALTER TABLE plans_new RENAME TO plans;
-        CREATE INDEX plans_date_idx ON plans(date);
-      `);
+      // All steps in ONE transaction: a kill mid-migration rolls back, so the
+      // table can never be left half-renamed or with plans_new stranded.
+      await db.withTransactionAsync(async () => {
+        await db.execAsync(`
+          DROP TABLE IF EXISTS plans_new;
+          CREATE TABLE plans_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal_type TEXT NOT NULL,
+            recipe_id TEXT, portion REAL NOT NULL DEFAULT 1, locked INTEGER NOT NULL DEFAULT 0,
+            food_id TEXT, food_name TEXT, portion_grams REAL, calories REAL, protein REAL, carbs REAL, fat REAL
+          );
+          INSERT INTO plans_new (id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat)
+            SELECT id, date, meal_type, recipe_id, portion, locked, food_id, food_name, portion_grams, calories, protein, carbs, fat FROM plans;
+          DROP TABLE plans;
+          ALTER TABLE plans_new RENAME TO plans;
+          CREATE INDEX plans_date_idx ON plans(date);
+        `);
+      });
     } else {
       await db.execAsync('CREATE INDEX IF NOT EXISTS plans_date_idx ON plans(date);');
     }
@@ -244,6 +278,16 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
   } catch (e) {
     console.error('Failed to migrate settings', e);
   }
+  // Idempotent XP awards: one row per (event, day/week) via a unique key.
+  try {
+    const xpCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(xp_events)');
+    if (xpCols.length > 0 && !xpCols.some((c) => c.name === 'dedupe_key')) {
+      await db.execAsync('ALTER TABLE xp_events ADD COLUMN dedupe_key TEXT');
+    }
+    await db.execAsync('CREATE UNIQUE INDEX IF NOT EXISTS xp_events_dedupe_idx ON xp_events(dedupe_key);');
+  } catch (e) {
+    console.error('Failed to migrate xp_events', e);
+  }
 
   await db.runAsync('INSERT OR IGNORE INTO settings (id) VALUES (?)', 'profile');
 }
@@ -260,7 +304,13 @@ export async function migrateSchemaIfNeeded(db: SQLiteDatabase) {
  * saved plans reference recipes live, so rewriting them would silently
  * change totals the user already reviewed.
  */
-export const SEED_VERSION = 1;
+export const SEED_VERSION = 2;
+
+// Counts compared against the DB are UNIQUE seed ids: a duplicated id in the
+// data must not make the guard unreachable (it re-ran the whole seed on every
+// launch when duplicates inflated seedFoods.length).
+const UNIQUE_SEED_FOOD_COUNT = new Set(seedFoods.map((f) => f.id)).size;
+const UNIQUE_SEED_RECIPE_COUNT = new Set(seedRecipes.map((r) => r.id)).size;
 
 export async function seedIfNeeded(db: SQLiteDatabase) {
   // First-launch seed: hundreds of rows. The old per-row loop issued one
@@ -276,7 +326,7 @@ export async function seedIfNeeded(db: SQLiteDatabase) {
       .getFirstAsync<{ value: string }>("SELECT value FROM sync_state WHERE key='seed_version'")
       .catch(() => null);
     needsRefresh = Number(versionRow?.value ?? 0) < SEED_VERSION;
-    if (Number(foodCount?.n ?? 0) >= seedFoods.length && Number(recipeCount?.n ?? 0) >= seedRecipes.length && !needsRefresh) {
+    if (Number(foodCount?.n ?? 0) >= UNIQUE_SEED_FOOD_COUNT && Number(recipeCount?.n ?? 0) >= UNIQUE_SEED_RECIPE_COUNT && !needsRefresh) {
       return;
     }
   } catch (e) {

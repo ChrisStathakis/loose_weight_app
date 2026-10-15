@@ -7,6 +7,7 @@ import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import * as Haptics from 'expo-haptics';
 import { dateKey, dateLabel } from '@/src/lib/db';
+import { addDaysKey, startOfWeekKey } from '@/src/lib/dates';
 import { GroceryItem, GroceryCategory, GroceryPriceOption, Locale, Recipe, RecipeIngredient } from '@/src/types';
 import { gradients, radius, useAppTheme } from '@/src/theme';
 import { EmptyState } from '@/src/components/EmptyState';
@@ -64,9 +65,7 @@ export default function Groceries() {
   const [detail, setDetail] = useState<DetailTarget | null>(null);
 
   const endDate = useMemo(() => {
-    const value = new Date(`${start}T12:00:00`);
-    value.setDate(value.getDate() + 6);
-    return value.toISOString().slice(0, 10);
+    return addDaysKey(start, 6);
   }, [start]);
 
   const load = useCallback(async () => {
@@ -101,7 +100,8 @@ export default function Groceries() {
         if (!row.recipe_id) return;
         let ingredients: RecipeIngredient[] = [];
         try {
-          ingredients = JSON.parse(row.ingredients) as RecipeIngredient[];
+          const parsed = JSON.parse(row.ingredients);
+          if (Array.isArray(parsed)) ingredients = parsed as RecipeIngredient[];
         } catch {
           return;
         }
@@ -131,15 +131,11 @@ export default function Groceries() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const shift = (amount: number) => {
-    const value = new Date(`${start}T12:00:00`);
-    value.setDate(value.getDate() + amount);
-    setStart(value.toISOString().slice(0, 10));
+    // Local day key: toISOString on a local midnight shifts a day back in UTC+ zones.
+    setStart(addDaysKey(start, amount));
   };
   const snapToWeek = () => {
-    const now = new Date();
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    setStart(monday.toISOString().slice(0, 10));
+    setStart(startOfWeekKey(dateKey()));
   };
 
   const build = async () => {
@@ -156,7 +152,8 @@ export default function Groceries() {
         if (!row.recipe_id) return;
         let ingredients: RecipeIngredient[] = [];
         try {
-          ingredients = JSON.parse(row.ingredients) as RecipeIngredient[];
+          const parsed = JSON.parse(row.ingredients);
+          if (Array.isArray(parsed)) ingredients = parsed as RecipeIngredient[];
         } catch {
           return;
         }
@@ -189,73 +186,77 @@ export default function Groceries() {
           },
         ]),
       );
-      // Manual items + prices survive regeneration.
-      await db.runAsync("DELETE FROM groceries WHERE date=? AND (source IS NULL OR source='auto')", start);
-      for (const item of grouped.values()) {
-        const key = `${item.name.toLowerCase()}|${item.unit}`;
-        const prev = prevMap.get(key);
-        const category = prev?.category
-          ? (prev.category as GroceryCategory)
-          : categorizeIngredient(item.name);
-        let price = prev?.price ?? 0;
-        let priceStore = prev?.priceStore ?? '';
-        // No preserved price: preselect most recently used store price —
-        // row-local memory first, then contributing recipes' store prices,
-        // then catalog prices of matching foods.
-        if (!price) {
-          const remembered = await getPriceOptions(db, item.name, item.unit);
-          if (remembered.length > 0) {
-            price = remembered[0].price;
-            priceStore = remembered[0].store;
-          } else {
-            try {
-              const recipeMap = await getRecipePriceMap(db, item.recipeIds);
-              const latest = latestRecipePrice(item.recipeIds.flatMap((id) => recipeMap[id] ?? []));
-              if (latest) {
-                price = latest.price;
-                priceStore = latest.store;
-              }
-            } catch {
-              // recipe preselect is best-effort
-            }
-          }
+      // Manual items + prices survive regeneration. Delete + rebuild run in
+      // ONE transaction: a crash mid-rebuild must not leave the list erased
+      // or half-generated (the source rows are the generated list itself).
+      await db.withTransactionAsync(async () => {
+        await db.runAsync("DELETE FROM groceries WHERE date=? AND (source IS NULL OR source='auto')", start);
+        for (const item of grouped.values()) {
+          const key = `${item.name.toLowerCase()}|${item.unit}`;
+          const prev = prevMap.get(key);
+          const category = prev?.category
+            ? (prev.category as GroceryCategory)
+            : categorizeIngredient(item.name);
+          let price = prev?.price ?? 0;
+          let priceStore = prev?.priceStore ?? '';
+          // No preserved price: preselect most recently used store price —
+          // row-local memory first, then contributing recipes' store prices,
+          // then catalog prices of matching foods.
           if (!price) {
-            try {
-              const foods = await findFoodsForIngredient(db, item.name);
-              if (foods.length > 0) {
-                const catalog = await getFoodPriceMap(db, foods.map((f) => f.id));
-                let best: { price: number; store: string; updatedAt: string } | null = null;
-                for (const f of foods) {
-                  for (const o of catalog[f.id] ?? []) {
-                    if (!best || o.updatedAt > best.updatedAt) {
-                      best = { price: o.price, store: o.store, updatedAt: o.updatedAt };
+            const remembered = await getPriceOptions(db, item.name, item.unit);
+            if (remembered.length > 0) {
+              price = remembered[0].price;
+              priceStore = remembered[0].store;
+            } else {
+              try {
+                const recipeMap = await getRecipePriceMap(db, item.recipeIds);
+                const latest = latestRecipePrice(item.recipeIds.flatMap((id) => recipeMap[id] ?? []));
+                if (latest) {
+                  price = latest.price;
+                  priceStore = latest.store;
+                }
+              } catch {
+                // recipe preselect is best-effort
+              }
+            }
+            if (!price) {
+              try {
+                const foods = await findFoodsForIngredient(db, item.name);
+                if (foods.length > 0) {
+                  const catalog = await getFoodPriceMap(db, foods.map((f) => f.id));
+                  let best: { price: number; store: string; updatedAt: string } | null = null;
+                  for (const f of foods) {
+                    for (const o of catalog[f.id] ?? []) {
+                      if (!best || o.updatedAt > best.updatedAt) {
+                        best = { price: o.price, store: o.store, updatedAt: o.updatedAt };
+                      }
                     }
                   }
+                  if (best) {
+                    price = best.price;
+                    priceStore = best.store;
+                  }
                 }
-                if (best) {
-                  price = best.price;
-                  priceStore = best.store;
-                }
+              } catch {
+                // catalog preselect is best-effort
               }
-            } catch {
-              // catalog preselect is best-effort
             }
           }
+          await db.runAsync(
+            'INSERT INTO groceries (date,ingredient,amount,unit,checked,price,price_store,category,source) VALUES (?,?,?,?,?,?,?,?,?) ' +
+              'ON CONFLICT(date,ingredient,unit) DO UPDATE SET amount=excluded.amount',
+            start,
+            item.name,
+            Number(item.amount.toFixed(1)),
+            item.unit,
+            prev?.checked ?? 0,
+            price,
+            priceStore,
+            category,
+            'auto',
+          );
         }
-        await db.runAsync(
-          'INSERT INTO groceries (date,ingredient,amount,unit,checked,price,price_store,category,source) VALUES (?,?,?,?,?,?,?,?,?) ' +
-            'ON CONFLICT(date,ingredient,unit) DO UPDATE SET amount=excluded.amount',
-          start,
-          item.name,
-          Number(item.amount.toFixed(1)),
-          item.unit,
-          prev?.checked ?? 0,
-          price,
-          priceStore,
-          category,
-          'auto',
-        );
-      }
+      });
       await load();
     } catch (e) {
       console.error('Failed to build groceries', e);
@@ -330,47 +331,56 @@ export default function Groceries() {
     const amount = Math.max(0, Number(String(fAmount).replace(',', '.')) || 0) || 1;
     const unit = fUnit.trim() || t('unitPiece');
     const price = parsePriceInput(fPrice);
-    if (editingId == null) {
-      // New item without a price: preselect the most recently used store price.
-      let finalPrice = price;
-      let finalStore = '';
-      if (finalPrice === 0) {
-        try {
-          const remembered = await getPriceOptions(db, name, unit);
-          if (remembered.length > 0) {
-            finalPrice = remembered[0].price;
-            finalStore = remembered[0].store;
+    try {
+      if (editingId == null) {
+        // New item without a price: preselect the most recently used store price.
+        let finalPrice = price;
+        let finalStore = '';
+        if (finalPrice === 0) {
+          try {
+            const remembered = await getPriceOptions(db, name, unit);
+            if (remembered.length > 0) {
+              finalPrice = remembered[0].price;
+              finalStore = remembered[0].store;
+            }
+          } catch {
+            // memory lookup is best-effort
           }
-        } catch {
-          // memory lookup is best-effort
         }
-      }
-      const existing = await db.getFirstAsync<any>(
-        'SELECT id,amount,price FROM groceries WHERE date=? AND ingredient=? AND unit=?',
-        start,
-        name,
-        unit,
-      );
-      if (existing) {
-        await db.runAsync('UPDATE groceries SET amount=?,price=?,price_store=?,category=?,source=? WHERE id=?', amount, finalPrice || price, finalStore, fCategory, 'manual', existing.id);
-      } else {
-        await db.runAsync(
-          'INSERT INTO groceries (date,ingredient,amount,unit,checked,price,price_store,category,source) VALUES (?,?,?,?,0,?,?,?,?)',
+        const existing = await db.getFirstAsync<any>(
+          'SELECT id,amount,price FROM groceries WHERE date=? AND ingredient=? AND unit=?',
           start,
           name,
-          Math.round(amount * 10) / 10,
           unit,
-          finalPrice,
-          finalStore,
-          fCategory,
-          'manual',
         );
+        if (existing) {
+          await db.runAsync('UPDATE groceries SET amount=?,price=?,price_store=?,category=?,source=? WHERE id=?', amount, finalPrice || price, finalStore, fCategory, 'manual', existing.id);
+        } else {
+          await db.runAsync(
+            'INSERT INTO groceries (date,ingredient,amount,unit,checked,price,price_store,category,source) VALUES (?,?,?,?,0,?,?,?,?)',
+            start,
+            name,
+            Math.round(amount * 10) / 10,
+            unit,
+            finalPrice,
+            finalStore,
+            fCategory,
+            'manual',
+          );
+        }
+      } else {
+        // Editing a row makes it the user's own: mark source='manual' so
+        // "Generate" keeps it, and leave price_store untouched (it is not edited
+        // in this modal but feeds future price presets).
+        await db.runAsync('UPDATE groceries SET ingredient=?,amount=?,unit=?,price=?,category=?,source=? WHERE id=?', name, Math.round(amount * 10) / 10, unit, price, fCategory, 'manual', editingId);
       }
-    } else {
-      await db.runAsync('UPDATE groceries SET ingredient=?,amount=?,unit=?,price=?,category=? WHERE id=?', name, Math.round(amount * 10) / 10, unit, price, fCategory, editingId);
+      setModalOpen(false);
+      load();
+    } catch (e) {
+      // Keep the modal open so the typed values are not lost.
+      console.error('Failed to save grocery item', e);
+      Alert.alert(t('groceryList'), t('saveFailed'));
     }
-    setModalOpen(false);
-    load();
   };
 
   const askDelete = (item: GroceryItem) => {
@@ -380,7 +390,11 @@ export default function Groceries() {
         text: t('delete'),
         style: 'destructive',
         onPress: async () => {
-          await db.runAsync('DELETE FROM groceries WHERE id=?', item.id);
+          try {
+            await db.runAsync('DELETE FROM groceries WHERE id=?', item.id);
+          } catch (e) {
+            console.error('Failed to delete grocery item', e);
+          }
           load();
         },
       },

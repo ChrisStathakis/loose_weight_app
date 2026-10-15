@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
+import { addDaysKey, weekKeys } from '@/src/lib/dates';
 import { buildProposal, containsExcluded, containsExcludedFood, ProposalDay, ProposalItem, mealSlotsForCount } from '@/src/lib/planner';
 import { parseNumber, scaleFood, sumNutrition } from '@/src/lib/nutrition';
 import { foodEmoji } from '@/src/lib/habits';
@@ -17,7 +18,7 @@ import { PriceSheet } from '@/src/components/PriceSheet';
 import { formatCheapest, getFoodPriceMap } from '@/src/lib/foodPrices';
 import { formatCheapestRecipe, getRecipePriceMap } from '@/src/lib/recipePrices';
 import type { FoodPriceOption, RecipePriceOption } from '@/src/types';
-import { DateStepper } from '@/src/components/DateStepper';
+import { WeekTabs, type WeekTabMark } from '@/src/components/WeekTabs';
 import { EmptyState } from '@/src/components/EmptyState';
 import { KcalBadge } from '@/src/components/MacroPill';
 import { GradientHero } from '@/src/ui/GradientHero';
@@ -27,21 +28,21 @@ import { DetailSheet, type DetailTarget } from '@/src/components/DetailSheet';
 type RecipeRow = Omit<Recipe, 'ingredients'> & { ingredients: string };
 
 // A corrupt ingredients payload must not blank the whole plan screen:
-// skip the row with a warning instead of throwing inside load().
+// skip the row with a warning instead of throwing inside load(). Non-array
+// JSON (e.g. a string) also fails the guard: .map/.some on it would crash
+// the render later.
 const parseRecipeRow = (row: RecipeRow): Recipe | null => {
   try {
-    return { ...row, ingredients: JSON.parse(row.ingredients) };
+    const parsed = JSON.parse(row.ingredients);
+    if (!Array.isArray(parsed)) throw new Error('ingredients is not an array');
+    return { ...row, ingredients: parsed };
   } catch (e) {
     console.warn('Skipping recipe with corrupt ingredients', row.id, e);
     return null;
   }
 };
 
-const addDays = (base: string, offset: number) => {
-  const d = new Date(`${base}T12:00:00`);
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
-};
+const addDays = (base: string, offset: number) => addDaysKey(base, offset);
 
 const mealRank = (meal: string) =>
   meal === 'breakfast' ? 1 : meal === 'brunch' ? 2 : meal === 'snack' ? 3 : meal === 'lunch' ? 4 : meal === 'snack2' ? 5 : meal === 'dinner' ? 6 : 7;
@@ -87,6 +88,7 @@ export default function Plan() {
   const { addXp, unlockBadge, celebrate } = useGamification();
   const [date, setDate] = useState(dateKey());
   const [plans, setPlans] = useState<PlanEntry[]>([]);
+  const [weekPlanInfo, setWeekPlanInfo] = useState<Record<string, WeekTabMark>>({});
 
   // Builder state
   const [query, setQuery] = useState('');
@@ -99,6 +101,7 @@ export default function Plan() {
   const [calorieInput, setCalorieInput] = useState('');
   const [useProtein, setUseProtein] = useState(false);
   const [preview, setPreview] = useState<ProposalDay[] | null>(null);
+  const [previewDay, setPreviewDay] = useState(0);
   const [saving, setSaving] = useState(false);
   const [defaultFoods, setDefaultFoods] = useState<Food[]>([]);
   const [defaultRecipes, setDefaultRecipes] = useState<Recipe[]>([]);
@@ -167,6 +170,15 @@ export default function Plan() {
         } as PlanEntry;
       }),
     );
+    // Week strip marks: which days of the visible week have saved plan rows.
+    const week = weekKeys(date);
+    const weekRows = await db.getAllAsync<{ date: string; n: number }>(
+      'SELECT date, COUNT(*) as n FROM plans WHERE date BETWEEN ? AND ? GROUP BY date',
+      week[0], week[6],
+    );
+    const weekMarks: Record<string, WeekTabMark> = {};
+    for (const row of weekRows) if (Number(row.n) > 0) weekMarks[row.date] = 'has-data';
+    setWeekPlanInfo(weekMarks);
     } catch (e) {
       console.error('Failed to load plan', e);
     }
@@ -311,6 +323,7 @@ export default function Plan() {
       return;
     }
     setPreview(result);
+    setPreviewDay(0);
     setAddMeal(null);
     setAddPreviewDay(null);
     // The proposal renders below the button — bring it into view so the
@@ -390,7 +403,16 @@ export default function Plan() {
         text: t('delete'),
         style: 'destructive',
         onPress: async () => {
-          await db.runAsync('DELETE FROM recipes WHERE id=?', id);
+          // Plans store only recipe_id: deleting the recipe without its plan
+          // rows would leave entries that log 0 kcal and can never be logged.
+          try {
+            await db.withTransactionAsync(async () => {
+              await db.runAsync('DELETE FROM plans WHERE recipe_id=?', id);
+              await db.runAsync('DELETE FROM recipes WHERE id=?', id);
+            });
+          } catch (e) {
+            console.error('Failed to delete recipe', e);
+          }
           reloadPreservingScroll();
         },
       },
@@ -606,7 +628,12 @@ export default function Plan() {
           'Planner',
         );
       } else {
-        if (!entry.recipe) return;
+        if (!entry.recipe) {
+          // Orphaned plan row (recipe deleted by an older build): explain
+          // instead of silently doing nothing.
+          Alert.alert(t('logMeal'), t('recipeMissing'));
+          return;
+        }
         await db.runAsync(
           'INSERT INTO diary_entries (date,meal_type,food_id,food_name,portion_grams,calories,protein,carbs,fat,source) VALUES (?,?,?,?,?,?,?,?,?,?)',
           entry.date, entry.meal_type, entry.recipe.id,
@@ -647,6 +674,8 @@ export default function Plan() {
   const previewTotals = preview
     ? preview.map((d) => ({ date: addDays(date, d.dateOffset), kcal: d.totalCalories, protein: d.totalProtein }))
     : [];
+  // Clamped so a stale index (e.g. a shorter regenerated proposal) can't blank the preview.
+  const activePreviewDay = preview ? Math.min(previewDay, preview.length - 1) : 0;
 
   return (
     <ScrollView
@@ -660,7 +689,7 @@ export default function Plan() {
     >
       <Text style={styles.title}>{t('plan')} ✨</Text>
       <Text style={styles.subtitle}>{dateLabel(date, locale)}</Text>
-      <DateStepper date={date} locale={locale} onChange={(next) => { setDate(next); setPreview(null); }} />
+      <WeekTabs date={date} locale={locale} marks={weekPlanInfo} onSelect={(next) => { setDate(next); setPreview(null); }} />
 
       <GradientHero colors={gradients.heroDark}>
         <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '800', fontSize: 12 }}>✨ {t('planTotals')}</Text>
@@ -830,14 +859,46 @@ export default function Plan() {
           {preview[0]?.usedDefaults ? (
             <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 12, marginTop: 4 }}>{t('styleDefaults')}</Text>
           ) : null}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2, marginTop: 10 }}>
+            {preview.map((day, di) => {
+              const dayDate = addDays(date, day.dateOffset);
+              const selected = di === activePreviewDay;
+              return (
+                <Pressable
+                  key={dayDate}
+                  onPress={() => setPreviewDay(di)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${t('dayPlan')} ${di + 1} · ${dateLabel(dayDate, locale)}`}
+                  style={{
+                    minWidth: 76,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: radius.md,
+                    borderWidth: 1.5,
+                    alignItems: 'center',
+                    backgroundColor: selected ? colors.green : colors.surface,
+                    borderColor: selected ? colors.green : colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: selected ? colors.onGreen : colors.ink }}>
+                    {t('dayPlan')} {di + 1}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', marginTop: 1, color: selected ? 'rgba(255,255,255,0.85)' : colors.muted }}>
+                    {dayDate.slice(8, 10)}/{dayDate.slice(5, 7)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           {preview.map((day, di) => {
+            if (di !== activePreviewDay) return null;
             const dayDate = addDays(date, day.dateOffset);
             const info = previewTotals[di];
             const dayMeals = [...new Set(day.items.map((i) => i.meal_type))].sort((a, b) => mealRank(a) - mealRank(b));
             return (
               <View key={dayDate} style={{ marginTop: 10, backgroundColor: colors.bg, borderRadius: radius.md, padding: 12, borderWidth: 1, borderColor: colors.border }}>
-                <Text style={{ color: colors.ink, fontWeight: '900' }}>{t('dayPlan')} {di + 1} · {dateLabel(dayDate, locale)}</Text>
-                <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 12, marginTop: 2 }}>
+                <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 12 }}>
                   ≈ {Math.round(info.kcal)} kcal · {Math.round(info.protein)}g {t('protein')}
                   {info.kcal < calorieGoal * 0.9 ? ` · ${t('shortfall')} ${Math.round(calorieGoal - info.kcal)} kcal` : ''}
                 </Text>
@@ -1027,25 +1088,21 @@ export default function Plan() {
                   <Ionicons name={entry.locked ? 'lock-closed-outline' : 'lock-open-outline'} size={16} color={entry.locked ? colors.onInk : colors.ink} />
                   <Text style={[styles.chipText, entry.locked && styles.chipTextActive]}>{entry.locked ? t('locked') : t('lock')}</Text>
                 </Pressable>
-                {entry.kind === 'food' ? (
-                  <Pressable onPress={() => replaceFood(entry)} style={[styles.chip, { flex: 1, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 6 }]}>
-                    <Ionicons name="shuffle" size={16} color={colors.ink} />
-                    <Text style={styles.chipText}>{t('replace')}</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable onPress={() => replaceRecipe(entry)} style={[styles.chip, { flex: 1, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 6 }]}>
-                    <Ionicons name="shuffle" size={16} color={colors.ink} />
-                    <Text style={styles.chipText}>{t('replace')}</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  onPress={() => (entry.kind === 'food' ? replaceFood(entry) : replaceRecipe(entry))}
+                  style={[styles.chip, { flex: 1, opacity: entry.locked ? 0.45 : 1, flexDirection: 'row', gap: 6 }]}
+                >
+                  <Ionicons name="shuffle" size={16} color={colors.ink} />
+                  <Text style={styles.chipText}>{t('replace')}</Text>
+                </Pressable>
                 <Pressable onPress={() => removeEntry(entry)} disabled={entry.locked} accessibilityLabel={t('remove')} style={[styles.chip, { opacity: entry.locked ? 0.45 : 1, paddingHorizontal: 12, flexDirection: 'row' }]}>
                   <Ionicons name="trash-outline" size={16} color={colors.red} />
                 </Pressable>
-                <Pressable onPress={() => logMeal(entry)} style={[styles.button, { flex: 1, minHeight: 42, paddingHorizontal: 5, flexDirection: 'row', gap: 6 }]}>
-                  <Ionicons name="restaurant-outline" size={17} color={colors.onGreen} />
-                  <Text style={[styles.buttonText, { fontSize: 13 }]}>{t('logMeal')}</Text>
-                </Pressable>
               </View>
+              <Pressable onPress={() => logMeal(entry)} style={[styles.button, { marginTop: 8, minHeight: 46, flexDirection: 'row', gap: 8 }]}>
+                <Ionicons name="restaurant-outline" size={18} color={colors.onGreen} />
+                <Text style={styles.buttonText}>{t('logMeal')}</Text>
+              </Pressable>
             </View>
           );
               })}
@@ -1084,7 +1141,7 @@ export default function Plan() {
               placeholderTextColor={colors.muted}
               style={[styles.input, { marginTop: 12 }]}
             />
-            <ScrollView style={{ marginTop: 4, maxHeight: 320 }} nestedScrollEnabled>
+            <ScrollView style={{ marginTop: 4, maxHeight: 320 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
               {addTab === 'food' ? (
                 addFoodResults.length === 0 ? (
                   <Text style={{ color: colors.muted, marginTop: 12, fontWeight: '600' }}>

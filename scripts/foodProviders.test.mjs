@@ -52,6 +52,18 @@ test('mapProduct returns null without any name', () => {
   assert.equal(mapProduct(null, 0, 'en'), null);
 });
 
+test('mapProduct gives barcode-less products stable, unique ids', () => {
+  // Regression: ids used to be `off-${index}`, so the first result of every
+  // search shared the id "off-0" and overwrote the previous cached food.
+  const a = mapProduct({ product_name: 'Feta', brands: 'Kolios', nutriments: {} }, 0, 'en');
+  const b = mapProduct({ product_name: 'Feta', brands: 'Kolios', nutriments: {} }, 7, 'en');
+  const c = mapProduct({ product_name: 'Yogurt', brands: 'Kolios', nutriments: {} }, 0, 'en');
+  assert.ok(a && b && c);
+  assert.equal(a.id, b.id);
+  assert.notEqual(a.id, c.id);
+  assert.ok(a.id.startsWith('off-x'));
+});
+
 test('searchFoodsOnline merges both endpoints and dedupes by barcode', async () => {
   const calls = [];
   globalThis.fetch = async (url) => {

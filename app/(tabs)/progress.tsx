@@ -7,6 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useApp } from '@/src/context/AppContext';
 import { useGamification } from '@/src/context/GamificationContext';
 import { dateKey, dateLabel } from '@/src/lib/db';
+import { addDaysKey, localDateKey } from '@/src/lib/dates';
 import { gradients, radius, useAppTheme } from '@/src/theme';
 import { parseNumber } from '@/src/lib/nutrition';
 import { EmptyState } from '@/src/components/EmptyState';
@@ -30,16 +31,14 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EMPTY_TOPS: TopMap = { breakfast: [], brunch: [], snack: [], lunch: [], snack2: [], dinner: [], snack3: [] };
 
 function shiftKey(key: string, delta: number): string {
-  const d = new Date(`${key}T12:00:00`);
-  d.setDate(d.getDate() + delta);
-  return d.toISOString().slice(0, 10);
+  return addDaysKey(key, delta);
 }
 
 function parseKey(key: string): Date | null {
   if (!DATE_RE.test(key)) return null;
   const d = new Date(`${key}T12:00:00`);
   if (Number.isNaN(d.getTime())) return null;
-  if (d.toISOString().slice(0, 10) !== key) return null;
+  if (localDateKey(d) !== key) return null;
   return d;
 }
 
@@ -136,7 +135,7 @@ export default function Progress() {
     for (let i = 0; i < safeTotal; i += 1) {
       const day = new Date(`${startKey}T12:00:00`);
       day.setDate(day.getDate() + i);
-      const key = day.toISOString().slice(0, 10);
+      const key = localDateKey(day);
       if (key > endKey) break;
       const row = map.get(key);
       list.push({ date: key, calories: Number(row?.calories ?? 0), protein: Number(row?.protein ?? 0), carbs: Number(row?.carbs ?? 0), fat: Number(row?.fat ?? 0), burned: burnMap.get(key) ?? 0 });
@@ -230,7 +229,9 @@ export default function Progress() {
     return out;
   }, [days, mode]);
 
-  const barData = days.length === 30 ? buckets.filter((_, i) => i % 2 === 0) : buckets;
+  // 30 daily bars per ~320dp is too dense with labels: show every other day,
+  // but filter from the END so the newest day (today) is never dropped.
+  const barData = days.length === 30 ? buckets.filter((_, i) => (buckets.length - 1 - i) % 2 === 0) : buckets;
   const maxCalories = Math.max(settings.calorie_goal, ...barData.map(netOf), 1);
   const latestWeight = weights[0];
   const firstWeight = weights[weights.length - 1];
